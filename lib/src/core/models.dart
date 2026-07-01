@@ -32,10 +32,11 @@ class MediaProject {
     this.schemaVersion = currentSchemaVersion,
     this.revision = 1,
     this.operations = const <EditOperation>[],
+    this.sourcePaths = const <String>[],
     this.syncState = SyncState.localOnly,
   });
 
-  static const currentSchemaVersion = 1;
+  static const currentSchemaVersion = 2;
   final String id;
   final String title;
   final ProjectKind kind;
@@ -44,6 +45,7 @@ class MediaProject {
   final int schemaVersion;
   final int revision;
   final List<EditOperation> operations;
+  final List<String> sourcePaths;
   final SyncState syncState;
 
   MediaProject copyWith({
@@ -51,6 +53,7 @@ class MediaProject {
     DateTime? updatedAt,
     int? revision,
     List<EditOperation>? operations,
+    List<String>? sourcePaths,
     SyncState? syncState,
   }) =>
       MediaProject(
@@ -62,6 +65,7 @@ class MediaProject {
         schemaVersion: schemaVersion,
         revision: revision ?? this.revision,
         operations: operations ?? this.operations,
+        sourcePaths: sourcePaths ?? this.sourcePaths,
         syncState: syncState ?? this.syncState,
       );
 
@@ -74,6 +78,7 @@ class MediaProject {
         'schemaVersion': schemaVersion,
         'revision': revision,
         'operations': operations.map((operation) => operation.toJson()).toList(),
+        'sourcePaths': sourcePaths,
         'syncState': syncState.name,
       };
 
@@ -96,6 +101,8 @@ class MediaProject {
           .map((value) =>
               EditOperation.fromJson(Map<String, Object?>.from(value as Map)))
           .toList(),
+      sourcePaths: (json['sourcePaths'] as List<dynamic>? ?? const [])
+          .cast<String>(),
       syncState: SyncState.values
           .byName(json['syncState'] as String? ?? SyncState.localOnly.name),
     );

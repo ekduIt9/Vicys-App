@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'core/models.dart';
 import 'data/project_repository.dart';
+import 'features/camera_screen.dart';
 import 'features/editor_screen.dart';
+import 'services/media_import_service.dart';
 
 class StudioSocialApp extends StatelessWidget {
   const StudioSocialApp({super.key});
@@ -10,7 +14,7 @@ class StudioSocialApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) => MaterialApp(
         debugShowCheckedModeBanner: false,
-        title: 'Studio Social',
+        title: 'Vicys',
         theme: ThemeData(
           brightness: Brightness.dark,
           colorSchemeSeed: const Color(0xff8b5cf6),
@@ -36,7 +40,10 @@ class _MainShellState extends State<MainShell> {
   Widget build(BuildContext context) {
     final pages = [
       ProjectsPage(repository: repository),
-      const CameraPage(),
+      CameraPage(
+        repository: repository,
+        active: selectedIndex == 1,
+      ),
       const FeedPage(),
       const ProfilePage(),
     ];
@@ -65,10 +72,57 @@ class ProjectsPage extends StatefulWidget {
 }
 
 class _ProjectsPageState extends State<ProjectsPage> {
+  final MediaImportService mediaImportService = MediaImportService();
   late Future<List<MediaProject>> projects = widget.repository.list();
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_recoverLostMedia());
+  }
 
   Future<void> create(ProjectKind kind) async {
     final project = await widget.repository.create(kind);
+    await _openEditor(project);
+  }
+
+  /// Opens the system media library and creates a project from selected files.
+  ///
+  /// Files are persisted before SQLite is updated. Mixed selections become a
+  /// video project so images can later be used as timeline clips or overlays.
+  Future<void> importMedia() async {
+    try {
+      final media = await mediaImportService.importFromGallery();
+      await _createFromMedia(media);
+    } catch (_) {
+      _showImportError();
+    }
+  }
+
+  /// Restores picker output when Android recreated the Activity under pressure.
+  Future<void> _recoverLostMedia() async {
+    try {
+      final media = await mediaImportService.recoverLostData();
+      await _createFromMedia(media);
+    } catch (_) {
+      _showImportError();
+    }
+  }
+
+  Future<void> _createFromMedia(List<ImportedMedia> media) async {
+    if (media.isEmpty) return;
+    final kind = media.any((item) => item.kind == ProjectKind.video)
+        ? ProjectKind.video
+        : ProjectKind.image;
+    final project = await widget.repository.create(
+      kind,
+      sourcePaths: media.map((item) => item.path).toList(growable: false),
+      title: media.first.originalName,
+    );
+    await _openEditor(project);
+  }
+
+  Future<void> _openEditor(MediaProject project) async {
     if (!mounted) return;
     await Navigator.of(context).push(MaterialPageRoute<void>(
       builder: (_) => EditorScreen(project: project, repository: widget.repository),
@@ -76,11 +130,20 @@ class _ProjectsPageState extends State<ProjectsPage> {
     setState(() => projects = widget.repository.list());
   }
 
+  void _showImportError() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text(
+        'Không thể nhập media. File gốc trên thiết bị vẫn an toàn.',
+      ),
+    ));
+  }
+
   @override
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.all(20),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Studio của bạn', style: Theme.of(context).textTheme.headlineMedium),
+          Text('Vicys của bạn', style: Theme.of(context).textTheme.headlineMedium),
           const SizedBox(height: 8),
           const Text('Tạo, chỉnh sửa và chia sẻ câu chuyện của riêng bạn.'),
           const SizedBox(height: 20),
@@ -97,6 +160,15 @@ class _ProjectsPageState extends State<ProjectsPage> {
               label: const Text('Dựng video'),
             )),
           ]),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: importMedia,
+              icon: const Icon(Icons.photo_library_outlined),
+              label: const Text('Nhập ảnh hoặc video từ thiết bị'),
+            ),
+          ),
           const SizedBox(height: 24),
           Text('Gần đây', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 12),
@@ -145,31 +217,6 @@ class _ProjectsPageState extends State<ProjectsPage> {
           )),
         ]),
       );
-}
-
-class CameraPage extends StatelessWidget {
-  const CameraPage({super.key});
-  @override
-  Widget build(BuildContext context) => Stack(fit: StackFit.expand, children: [
-        const ColoredBox(
-          color: Color(0xff18181e),
-          child: Center(child: Icon(Icons.camera_alt_outlined, size: 96, color: Colors.white24)),
-        ),
-        const Positioned(top: 20, left: 20, right: 20, child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [Icon(Icons.flash_off), Text('9:16'), Icon(Icons.timer_outlined)],
-        )),
-        Positioned(bottom: 32, left: 0, right: 0, child: Column(children: [
-          const Text('Camera native sẽ được kết nối tại đây'),
-          const SizedBox(height: 18),
-          Container(width: 76, height: 76, decoration: BoxDecoration(
-            shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 5))),
-          const SizedBox(height: 18),
-          const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Chip(label: Text('ẢNH')), SizedBox(width: 8), Chip(label: Text('VIDEO')),
-          ]),
-        ])),
-      ]);
 }
 
 class FeedPage extends StatelessWidget {

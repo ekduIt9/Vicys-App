@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as path;
 
 import '../core/models.dart';
 import '../data/project_repository.dart';
@@ -76,10 +79,8 @@ class _EditorScreenState extends State<EditorScreen> {
           aspectRatio: history.project.kind == ProjectKind.image ? 1 : 9 / 16,
           child: Container(
             decoration: BoxDecoration(color: const Color(0xff202027), borderRadius: BorderRadius.circular(12)),
-            child: Center(child: Icon(
-              history.project.kind == ProjectKind.image ? Icons.image_outlined : Icons.play_circle_outline,
-              size: 80, color: Colors.white24,
-            )),
+            clipBehavior: Clip.antiAlias,
+            child: _ProjectPreview(project: history.project),
           ),
         ))),
         if (history.project.kind == ProjectKind.video)
@@ -103,4 +104,58 @@ class _EditorScreenState extends State<EditorScreen> {
       ]),
     );
   }
+}
+
+class _ProjectPreview extends StatelessWidget {
+  const _ProjectPreview({required this.project});
+  final MediaProject project;
+
+  @override
+  Widget build(BuildContext context) {
+    if (project.sourcePaths.isEmpty) {
+      return Center(child: Icon(
+        project.kind == ProjectKind.image
+            ? Icons.image_outlined
+            : Icons.play_circle_outline,
+        size: 80,
+        color: Colors.white24,
+      ));
+    }
+    final source = project.sourcePaths.first;
+    if (project.kind == ProjectKind.image) {
+      return Image.file(
+        File(source),
+        fit: BoxFit.contain,
+        errorBuilder: (_, __, ___) => const _MissingMedia(),
+      );
+    }
+    return Stack(fit: StackFit.expand, children: [
+      const ColoredBox(color: Color(0xff18181e)),
+      const Center(child: Icon(Icons.play_circle_outline, size: 80)),
+      Positioned(
+        left: 12,
+        right: 12,
+        bottom: 12,
+        child: Text(
+          path.basename(source),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+        ),
+      ),
+    ]);
+  }
+}
+
+class _MissingMedia extends StatelessWidget {
+  const _MissingMedia();
+
+  @override
+  Widget build(BuildContext context) => const Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.broken_image_outlined, size: 64),
+          SizedBox(height: 8),
+          Text('Không tìm thấy file nguồn'),
+        ]),
+      );
 }

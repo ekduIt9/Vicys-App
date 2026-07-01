@@ -11,13 +11,31 @@ void main() {
       kind: ProjectKind.video,
       createdAt: now,
       updatedAt: now,
+      sourcePaths: const ['media/source.mp4'],
       operations: const [EditOperation(type: 'trim', parameters: {'end': 12})],
     );
 
     final decoded = MediaProject.decode(project.encode());
     expect(decoded.id, project.id);
     expect(decoded.operations.single.type, 'trim');
+    expect(decoded.sourcePaths, ['media/source.mp4']);
     expect(decoded.schemaVersion, MediaProject.currentSchemaVersion);
+  });
+
+  test('version 1 project opens without source media', () {
+    final decoded = MediaProject.fromJson({
+      'id': 'legacy-project',
+      'title': 'Legacy',
+      'kind': 'image',
+      'createdAt': '2026-01-01T00:00:00.000Z',
+      'updatedAt': '2026-01-01T00:00:00.000Z',
+      'schemaVersion': 1,
+      'revision': 1,
+      'operations': <Object?>[],
+      'syncState': 'localOnly',
+    });
+
+    expect(decoded.sourcePaths, isEmpty);
   });
 
   test('history supports undo and redo', () {
@@ -55,7 +73,12 @@ void main() {
 
 class _MemoryRepository implements ProjectRepository {
   @override
-  Future<MediaProject> create(ProjectKind kind) => throw UnimplementedError();
+  Future<MediaProject> create(
+    ProjectKind kind, {
+    List<String> sourcePaths = const <String>[],
+    String? title,
+  }) =>
+      throw UnimplementedError();
   @override
   Future<void> delete(String id) async {}
   @override

@@ -1,9 +1,8 @@
-# Studio Social
+# Vicys
 
 Nền móng MVP Flutter cho ứng dụng camera, chỉnh ảnh/video, đồng bộ cloud và mạng
-xã hội. Bản hiện tại chạy offline với dữ liệu demo và cung cấp project schema,
-autosave, undo/redo, conflict detection, giao diện bốn module và schema Supabase
-có Row Level Security.
+xã hội. Ứng dụng chạy local-first với SQLite; Firebase đảm nhiệm Authentication,
+Firestore, Storage, Cloud Functions và thông báo FCM.
 
 ## Chạy ứng dụng
 
@@ -14,24 +13,63 @@ flutter pub get
 flutter run
 ```
 
-Để bật Supabase:
+## Cấu hình Firebase
+
+Tạo Firebase project phát triển, sau đó chạy:
 
 ```powershell
-flutter run --dart-define=SUPABASE_URL=https://YOUR_PROJECT.supabase.co `
-  --dart-define=SUPABASE_ANON_KEY=YOUR_ANON_KEY
+firebase login
+dart pub global activate flutterfire_cli
+flutterfire configure
+firebase use YOUR_FIREBASE_PROJECT_ID
+firebase deploy --only firestore:rules,firestore:indexes,storage,functions
 ```
 
-Không đưa service-role key vào ứng dụng. Chạy migration
-`supabase/migrations/0001_initial_schema.sql` bằng Supabase CLI hoặc dashboard.
+Khi chưa cấu hình Firebase, ứng dụng vẫn chạy offline bằng SQLite.
+Sau khi `flutterfire configure` tạo file native Android/iOS, bật Firebase bằng:
+
+```powershell
+flutter run --dart-define=FIREBASE_ENABLED=true
+```
+
+Chạy backend local:
+
+```powershell
+cd functions
+npm install
+npm run build
+cd ..
+firebase emulators:start
+```
+
+Chạy app kết nối emulator Android:
+
+```powershell
+flutter run `
+  --dart-define=USE_FIREBASE_EMULATORS=true `
+  --dart-define=FIREBASE_EMULATOR_HOST=10.0.2.2 `
+  --dart-define=FIREBASE_API_KEY=demo-key `
+  --dart-define=FIREBASE_APP_ID=1:123:android:demo `
+  --dart-define=FIREBASE_MESSAGING_SENDER_ID=123 `
+  --dart-define=FIREBASE_PROJECT_ID=demo-vicys
+```
+
+Trên iOS Simulator dùng host `127.0.0.1`. Firebase không cung cấp FCM emulator;
+push notification thật phải kiểm tra bằng Firebase project phát triển và thiết bị.
 
 ## Trạng thái triển khai
 
-- Có: shell ứng dụng, project ảnh/video, lưu local, autosave, undo/redo, manifest
-  có version, conflict marker, UI editor/timeline, export giả lập, feed/profile demo,
-  schema social/cloud và RLS.
-- Cần tích hợp tiếp: camera native, shader/filter, codecs/FFmpeg, chọn media,
-  render thật, OAuth, storage upload có resume, Supabase repositories, share-link
+- Có: shell ứng dụng, project ảnh/video, SQLite local có migration và sync queue,
+  camera chụp ảnh/quay video, nhập nhiều ảnh/video từ thư viện, lưu media bền vững,
+  autosave, undo/redo, manifest có version, UI editor/timeline, Firestore/Storage
+  Rules và FCM Functions.
+- Cần tích hợp tiếp: shader/filter, codecs/FFmpeg, preview video hoàn chỉnh,
+  render thật, OAuth, storage upload có resume, Firebase repositories, share-link
   server function, moderation dashboard và telemetry.
+
+Sau khi chạy `flutter create .`, thêm vào iOS `Info.plist`:
+`NSCameraUsageDescription`, `NSMicrophoneUsageDescription` và
+`NSPhotoLibraryUsageDescription`. Android dùng CameraX và system Photo Picker.
 
 ## Kiểm tra
 
@@ -40,5 +78,5 @@ flutter analyze
 flutter test
 ```
 
-Giới hạn cloud mặc định 2 GB phải được thực thi bằng server function trước khi
-cấp signed upload URL; không tin kích thước file do client gửi.
+Giới hạn cloud mặc định 2 GB phải được Cloud Function kiểm tra trước upload;
+không tin ownership, MIME hoặc kích thước do client gửi.

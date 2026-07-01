@@ -1,6 +1,6 @@
 ---
 name: studio-social
-description: Develop and review the Studio Social Flutter mobile app for camera effects, image/video editing, local-first projects, Supabase sync, project sharing, and social features. Use for any implementation, refactor, performance optimization, UI/UX work, database migration, media pipeline change, testing, or code review in this repository; enforce maintainability, responsive UI, data safety, and documentation of processing functions.
+description: Develop and review the Studio Social Flutter mobile app for camera effects, image/video editing, local-first projects, Firebase sync and notifications, project sharing, and social features. Use for any implementation, refactor, performance optimization, UI/UX work, database migration, media pipeline change, testing, or code review in this repository; enforce maintainability, responsive UI, data safety, and documentation of processing functions.
 ---
 
 # Studio Social
@@ -18,7 +18,7 @@ description: Develop and review the Studio Social Flutter mobile app for camera 
 1. Update domain models and versioned serialization.
 2. Define or adjust repository/service interfaces.
 3. Implement local persistence before cloud synchronization.
-4. Implement Supabase/native adapters without leaking SDK types upward.
+4. Implement Firebase/native adapters without leaking SDK types upward.
 5. Connect feature state and UI last.
 6. Add tests alongside the changed behavior.
 
@@ -76,9 +76,9 @@ documentation within the same change.
 - Keep both versions when equal revisions have divergent manifests.
 - Stream large files, use resumable checksum-based upload and validate quota server-side.
 - Use private storage and short-lived signed URLs.
-- Enforce authorization with RLS and server validation; never trust client ownership,
+- Enforce authorization with Firebase Security Rules and server validation; never trust client ownership,
   MIME, size, moderation status or share-link validity.
-- Never expose service-role keys or log credentials, signed URLs or private content.
+- Never expose Admin SDK credentials or log credentials, download URLs or private content.
 
 ## Validate before handoff
 
@@ -90,12 +90,12 @@ flutter analyze
 flutter test
 ```
 
-For schema changes, review every table with RLS enabled and test owner, stranger,
-anonymous and blocked-user access. For UI/media changes, verify lifecycle,
+For cloud changes, review Firestore and Storage Rules and test owner, stranger,
+anonymous and blocked-user access in the emulator. For UI/media changes, verify lifecycle,
 permission denial, offline behavior, cancellation, missing media and low storage
 on representative physical devices.
 
-Report exactly what was validated. If Flutter, native SDKs, Supabase or devices
+Report exactly what was validated. If Flutter, native SDKs, Firebase or devices
 are unavailable, state the unverified checks; never imply they passed.
 
 ## Definition of done

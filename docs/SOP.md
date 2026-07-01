@@ -3,7 +3,7 @@
 ## 1. Mục đích và phạm vi
 
 Tài liệu này là quy trình chuẩn khi phân tích, viết, review và phát hành mã nguồn
-Studio Social. Mọi thay đổi Flutter, native Android/iOS, Supabase, media pipeline
+Studio Social. Mọi thay đổi Flutter, native Android/iOS, Firebase, media pipeline
 và UI/UX đều phải tuân theo SOP này.
 
 Thứ tự ưu tiên khi có đánh đổi:
@@ -26,8 +26,8 @@ Một thay đổi chỉ hoàn thành khi:
 - Dữ liệu local-first; mất mạng không làm mất draft.
 - Có test tương ứng với mức rủi ro.
 - Chạy sạch `dart format`, `flutter analyze` và `flutter test`.
-- Thay đổi database có migration tiến, RLS và kiểm thử quyền truy cập.
-- Không commit secret, service-role key, media cá nhân hoặc file build.
+- Thay đổi database có migration tiến, Security Rules và kiểm thử quyền truy cập.
+- Không commit secret, Admin SDK credential, media cá nhân hoặc file build.
 - Đã kiểm tra accessibility, dark theme và kích thước màn hình nhỏ.
 - Đã cập nhật SOP/SKILL khi thay đổi quy ước kiến trúc.
 
@@ -88,19 +88,19 @@ Với thay đổi UI/media, kiểm tra thêm trên thiết bị thật:
 
 - `features/`: màn hình, widget và state theo tính năng.
 - `core/`: model thuần, lỗi dùng chung, config và utility nhỏ.
-- `data/`: repository implementation, local database, Supabase và mapper.
+- `data/`: repository implementation, local database, Firebase và mapper.
 - `services/`: camera, render, sync, share và tác vụ nền.
 - Native plugin: chỉ chứa khả năng cần CameraX, AVFoundation, GPU hoặc codec.
 
 UI chỉ phụ thuộc interface. Repository chịu trách nhiệm lấy/lưu dữ liệu. Service
 điều phối tác vụ nghiệp vụ hoặc native dài hạn. Model không import Flutter,
-Supabase hoặc plugin nền tảng.
+Firebase hoặc plugin nền tảng.
 
 ### 4.2 Quy tắc dependency
 
 - Không import feature A trực tiếp vào feature B; dùng interface/core model.
 - Không truyền `BuildContext` vào repository hoặc service.
-- Không trả raw Supabase response ra ngoài data layer.
+- Không trả raw Firebase response ra ngoài data layer.
 - Chuyển lỗi SDK thành sealed/domain error có thông điệp hành động được.
 - Không dùng utility class làm nơi chứa business logic không rõ ownership.
 
@@ -207,8 +207,8 @@ trade-off, không diễn giải từng dòng lệnh.
 
 ## 8. Bảo mật và quyền riêng tư
 
-- Chỉ dùng anon key ở client; service-role key chỉ ở server environment.
-- RLS áp dụng cho mọi bảng và kiểm thử cả truy cập trái phép.
+- Client chỉ dùng Firebase config công khai; Admin SDK credential chỉ ở server environment.
+- Firestore/Storage Security Rules áp dụng cho mọi collection/path và kiểm thử truy cập trái phép.
 - Server tự xác nhận owner, quota, MIME, byte size và trạng thái share link.
 - Private bucket mặc định; cấp signed URL sau kiểm tra quyền.
 - Không log token, email, caption riêng tư, đường dẫn signed hoặc media bytes.
@@ -221,7 +221,7 @@ trade-off, không diễn giải từng dòng lệnh.
 - Unit test: model migration, edit history, sync conflict, retry và validation.
 - Widget test: loading/empty/error, editor controls, accessibility và navigation.
 - Integration test: capture/import → edit → autosave → export → upload → post.
-- RLS test: owner, follower, stranger, blocked user và anonymous.
+- Security Rules test: owner, follower, stranger, blocked user và anonymous.
 - Golden test cho UI ổn định; không dùng golden thay cho behavior test.
 - Performance test với project lớn và video 10 phút ở 1080p.
 - Regression test bắt buộc cho mọi lỗi mất dữ liệu, quyền hoặc privacy.
@@ -237,7 +237,7 @@ ranh giới repository/service để test luồng thực.
 - Tác vụ dài có progress, retry, timeout và cancellation không?
 - Mọi controller/subscription/file handle đã được dispose/close chưa?
 - Offline, conflict, file mất và thiếu dung lượng được xử lý chưa?
-- RLS/server có tự xác minh thay vì tin client không?
+- Security Rules/server có tự xác minh thay vì tin client không?
 - Thay đổi schema/project có migration và backward compatibility không?
 - Test có chứng minh tiêu chí nghiệm thu và nhánh lỗi quan trọng không?
 
