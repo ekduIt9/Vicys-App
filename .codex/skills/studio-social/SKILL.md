@@ -26,6 +26,18 @@ Keep Flutter widgets declarative. Put business rules in domain/service code and
 I/O in repositories. Inject dependencies through constructors. Never pass
 `BuildContext` into data or service layers.
 
+## Handle reported errors
+
+When the user reports a build, runtime or test error:
+
+1. Inspect the exact failing symbol, call site, dependency version and surrounding code.
+2. Identify the root cause and distinguish it from downstream wrapper errors.
+3. Explain the problem, impact, proposed code change and validation commands.
+4. Do not modify implementation files until the user confirms the proposed fix,
+   unless the user explicitly asks to fix immediately.
+5. After confirmation, apply the smallest safe fix, run available checks and
+   report any checks blocked by missing SDKs or devices.
+
 ## Protect UI performance
 
 - Keep CPU-heavy media, hashing, large JSON and file work off the UI isolate.

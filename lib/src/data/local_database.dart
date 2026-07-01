@@ -8,8 +8,8 @@ import 'package:sqflite/sqflite.dart';
 /// sqflite worker thread. Callers share the lazily opened instance and must call
 /// [close] only when the application process is shutting down or in tests.
 class LocalDatabase {
-  LocalDatabase({DatabaseFactory? databaseFactory})
-      : _databaseFactory = databaseFactory ?? databaseFactorySqflite;
+  LocalDatabase({DatabaseFactory? injectedFactory})
+      : _databaseFactory = injectedFactory ?? databaseFactory;
 
   static const databaseName = 'vicys.db';
   static const schemaVersion = 1;
