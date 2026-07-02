@@ -37,6 +37,8 @@ When the user reports a build, runtime or test error:
    unless the user explicitly asks to fix immediately.
 5. After confirmation, apply the smallest safe fix, run available checks and
    report any checks blocked by missing SDKs or devices.
+6. When confirmation is required, ask for and accept a plain `Yes` or `No`;
+   do not require the user to repeat a command phrase.
 
 ## Protect UI performance
 
@@ -74,6 +76,10 @@ When the user reports a build, runtime or test error:
   caret upgrades previously selected packages requiring Dart 3.10.
 - Represent labeled canvas ratios as records instead of keys in a const
   `Map<double, String>`; computed double keys cannot be const-evaluated.
+- A blank video project must show an in-editor media CTA and hide edit tools
+  until at least one durable video source has been imported.
+- Source-list changes go through `EditHistory.replaceSourcePaths` so adding
+  clips increments revision, autosaves and remains undoable.
 
 ## Preserve UX
 

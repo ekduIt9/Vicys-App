@@ -9,6 +9,7 @@ import '../core/models.dart';
 import '../core/video_editing.dart';
 import '../data/project_repository.dart';
 import '../services/audio_import_service.dart';
+import '../services/media_import_service.dart';
 import '../services/services.dart';
 import '../ui/vicys_design.dart';
 import 'video_preview.dart';
@@ -28,12 +29,14 @@ class _EditorScreenState extends State<EditorScreen> {
   late final EditHistory history = EditHistory(widget.project);
   late final AutosaveController autosave = AutosaveController(widget.repository);
   final audioImportService = AudioImportService();
+  final mediaImportService = MediaImportService();
   late ImageEffectSettings imageEffects =
       ImageEffectSettings.fromProject(widget.project);
   final videoPosition = ValueNotifier<Duration>(Duration.zero);
   final videoDuration = ValueNotifier<Duration>(Duration.zero);
   final videoPreviewKey = GlobalKey<VideoPreviewState>();
   int selectedClip = 0;
+  bool importingVideo = false;
   String? imagePanel;
 
   void apply(String type) {
@@ -62,6 +65,7 @@ class _EditorScreenState extends State<EditorScreen> {
   void undo() {
     setState(() {
       history.undo();
+      _clampSelectedClip();
       imageEffects = ImageEffectSettings.fromProject(history.project);
     });
     autosave.schedule(history.project);
@@ -70,9 +74,19 @@ class _EditorScreenState extends State<EditorScreen> {
   void redo() {
     setState(() {
       history.redo();
+      _clampSelectedClip();
       imageEffects = ImageEffectSettings.fromProject(history.project);
     });
     autosave.schedule(history.project);
+  }
+
+  void _clampSelectedClip() {
+    final count = history.project.sourcePaths.length;
+    if (count == 0) {
+      selectedClip = 0;
+    } else if (selectedClip >= count) {
+      selectedClip = count - 1;
+    }
   }
 
   void handleTool(String tool) {
@@ -129,6 +143,34 @@ class _EditorScreenState extends State<EditorScreen> {
       VideoClipEdit.fromProject(history.project, selectedClip);
   VideoComposition get videoComposition =>
       VideoComposition.fromProject(history.project);
+
+  /// Imports durable video files and appends them to the current project.
+  ///
+  /// Picker cancellation leaves the project unchanged. Imported files are
+  /// persisted by [MediaImportService] before history and autosave are updated.
+  Future<void> importVideos() async {
+    if (importingVideo) return;
+    setState(() => importingVideo = true);
+    try {
+      final media = await mediaImportService.importVideos();
+      if (!mounted || media.isEmpty) return;
+      final paths = media.map((item) => item.path);
+      setState(() {
+        history.replaceSourcePaths([
+          ...history.project.sourcePaths,
+          ...paths,
+        ]);
+        selectedClip = history.project.sourcePaths.length - media.length;
+      });
+      autosave.schedule(history.project);
+    } catch (_) {
+      if (mounted) {
+        _showMessage('Không thể thêm video. Draft hiện tại vẫn an toàn.');
+      }
+    } finally {
+      if (mounted) setState(() => importingVideo = false);
+    }
+  }
 
   /// Opens trim controls and commits one operation when the user confirms.
   Future<void> _showTrimEditor() async {
@@ -488,6 +530,17 @@ class _EditorScreenState extends State<EditorScreen> {
             onPressed: history.canRedo ? redo : null,
             icon: const Icon(Icons.redo),
           ),
+          if (history.project.kind == ProjectKind.video)
+            IconButton(
+              tooltip: 'Thêm video',
+              onPressed: importingVideo ? null : importVideos,
+              icon: importingVideo
+                  ? const SizedBox.square(
+                      dimension: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.add),
+            ),
           TextButton(
             onPressed: finish,
             child: Text(
@@ -506,21 +559,27 @@ class _EditorScreenState extends State<EditorScreen> {
             decoration: BoxDecoration(color: const Color(0xff202027), borderRadius: BorderRadius.circular(12)),
             clipBehavior: Clip.antiAlias,
             child: history.project.kind == ProjectKind.video &&
-                    history.project.sourcePaths.isNotEmpty
-                ? VideoPreview(
-                    key: videoPreviewKey,
-                    clip: selectedVideoClip,
-                    composition: videoComposition,
-                    position: videoPosition,
-                    duration: videoDuration,
+                    history.project.sourcePaths.isEmpty
+                ? _EmptyVideoProject(
+                    importing: importingVideo,
+                    onImport: importVideos,
                   )
-                : _ProjectPreview(
-                    project: history.project,
-                    imageEffects: imageEffects,
-                  ),
+                : history.project.kind == ProjectKind.video
+                    ? VideoPreview(
+                        key: videoPreviewKey,
+                        clip: selectedVideoClip,
+                        composition: videoComposition,
+                        position: videoPosition,
+                        duration: videoDuration,
+                      )
+                    : _ProjectPreview(
+                        project: history.project,
+                        imageEffects: imageEffects,
+                      ),
           ),
         ))),
-        if (history.project.kind == ProjectKind.video)
+        if (history.project.kind == ProjectKind.video &&
+            history.project.sourcePaths.isNotEmpty)
           VideoTimeline(
             project: history.project,
             position: videoPosition,
@@ -541,9 +600,10 @@ class _EditorScreenState extends State<EditorScreen> {
             onCommit: commitImageEffects,
             onClose: () => setState(() => imagePanel = null),
           )
-        else if (history.project.kind == ProjectKind.video)
+        else if (history.project.kind == ProjectKind.video &&
+            history.project.sourcePaths.isNotEmpty)
           VideoToolShelf(onToolSelected: handleTool)
-        else
+        else if (history.project.kind == ProjectKind.image)
           SizedBox(height: 92, child: ListView.separated(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             scrollDirection: Axis.horizontal,
@@ -560,6 +620,51 @@ class _EditorScreenState extends State<EditorScreen> {
       ]),
     );
   }
+}
+
+class _EmptyVideoProject extends StatelessWidget {
+  const _EmptyVideoProject({
+    required this.importing,
+    required this.onImport,
+  });
+
+  final bool importing;
+  final VoidCallback onImport;
+
+  @override
+  Widget build(BuildContext context) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.video_library_outlined, size: 64),
+              const SizedBox(height: 12),
+              Text(
+                'Thêm video để bắt đầu',
+                style: Theme.of(context).textTheme.titleMedium,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Video được lưu cục bộ và file gốc không bị thay đổi.',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: importing ? null : onImport,
+                icon: importing
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.add),
+                label: Text(importing ? 'Đang thêm…' : 'Chọn video'),
+              ),
+            ],
+          ),
+        ),
+      );
 }
 
 class _ProjectPreview extends StatelessWidget {

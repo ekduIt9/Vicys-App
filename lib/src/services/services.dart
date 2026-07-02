@@ -28,6 +28,21 @@ class EditHistory {
     );
   }
 
+  /// Replaces source media as one undoable, monotonic project mutation.
+  ///
+  /// Paths must already point to durable app-owned files. This performs no
+  /// file I/O; callers persist the resulting project through autosave.
+  void replaceSourcePaths(List<String> sourcePaths) {
+    _undo.add(project);
+    _redo.clear();
+    project = project.copyWith(
+      updatedAt: DateTime.now(),
+      revision: project.revision + 1,
+      sourcePaths: List.unmodifiable(sourcePaths),
+      syncState: SyncState.queued,
+    );
+  }
+
   /// Restores the previous operation state as a new monotonic revision.
   ///
   /// The original media remains untouched and redo retains the current state.
@@ -38,6 +53,7 @@ class EditHistory {
     _redo.add(current);
     project = current.copyWith(
       operations: previous.operations,
+      sourcePaths: previous.sourcePaths,
       updatedAt: DateTime.now(),
       revision: current.revision + 1,
       syncState: SyncState.queued,
@@ -55,6 +71,7 @@ class EditHistory {
     _undo.add(current);
     project = current.copyWith(
       operations: next.operations,
+      sourcePaths: next.sourcePaths,
       updatedAt: DateTime.now(),
       revision: current.revision + 1,
       syncState: SyncState.queued,

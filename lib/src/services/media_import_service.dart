@@ -40,6 +40,19 @@ class MediaImportService {
     return _persistAll(files);
   }
 
+  /// Opens the system picker and imports only selected video files.
+  ///
+  /// Images selected by a mixed-media picker are ignored before file I/O, so
+  /// the video editor never creates orphaned image copies. Returned videos are
+  /// streamed into application documents and remain available after restart.
+  Future<List<ImportedMedia>> importVideos() async {
+    final files = await _picker.pickMultipleMedia(requestFullMetadata: false);
+    final videos = files
+        .where((file) => _classify(file) == ProjectKind.video)
+        .toList(growable: false);
+    return _persistAll(videos);
+  }
+
   /// Recovers picker results after Android destroys and recreates the Activity.
   ///
   /// Call during application startup or project-page initialization. Throws the

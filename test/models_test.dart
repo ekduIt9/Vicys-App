@@ -59,6 +59,24 @@ void main() {
     expect(history.project.revision, appliedRevision + 2);
   });
 
+  test('source media changes support undo and redo', () {
+    final now = DateTime.utc(2026, 7, 1);
+    final history = EditHistory(MediaProject(
+      id: 'video-1',
+      title: 'Video',
+      kind: ProjectKind.video,
+      createdAt: now,
+      updatedAt: now,
+    ));
+
+    history.replaceSourcePaths(const ['media/a.mp4', 'media/b.mp4']);
+    expect(history.project.sourcePaths, hasLength(2));
+    history.undo();
+    expect(history.project.sourcePaths, isEmpty);
+    history.redo();
+    expect(history.project.sourcePaths, hasLength(2));
+  });
+
   test('equal revision with divergent data becomes conflict', () {
     final now = DateTime.utc(2026, 7, 1);
     final base = MediaProject(
