@@ -53,4 +53,58 @@ void main() {
       throwsArgumentError,
     );
   });
+
+  test('composition rebuilds visual, audio and canvas settings', () {
+    final project = projectWith([
+      createVideoSettingOperation(
+        VideoEditOperation.filter,
+        VideoFilter.cinematic.name,
+      ),
+      createVideoSettingOperation(VideoEditOperation.text, 'Vicys'),
+      createVideoSettingOperation(VideoEditOperation.sticker, '✨'),
+      createVideoSettingOperation(VideoEditOperation.audio, '/audio/music.mp3'),
+      createVideoSettingOperation(
+        VideoEditOperation.transition,
+        VideoTransition.fade.name,
+      ),
+      createVideoSettingOperation(VideoEditOperation.canvas, 16 / 9),
+    ]);
+
+    final composition = VideoComposition.fromProject(project);
+
+    expect(composition.filter, VideoFilter.cinematic);
+    expect(composition.text, 'Vicys');
+    expect(composition.sticker, '✨');
+    expect(composition.audioPath, '/audio/music.mp3');
+    expect(composition.transition, VideoTransition.fade);
+    expect(composition.aspectRatio, closeTo(16 / 9, .001));
+  });
+
+  test('unknown composition values safely use defaults', () {
+    final project = projectWith([
+      createVideoSettingOperation(VideoEditOperation.filter, 'missing'),
+      createVideoSettingOperation(VideoEditOperation.transition, 'missing'),
+      createVideoSettingOperation(VideoEditOperation.canvas, -1),
+    ]);
+
+    final composition = VideoComposition.fromProject(project);
+
+    expect(composition.filter, VideoFilter.original);
+    expect(composition.transition, VideoTransition.none);
+    expect(composition.aspectRatio, closeTo(9 / 16, .001));
+  });
+
+  test('nullable overlay and audio operations remove previous values', () {
+    final project = projectWith([
+      createVideoSettingOperation(VideoEditOperation.text, 'Title'),
+      createVideoSettingOperation(VideoEditOperation.audio, '/audio/a.mp3'),
+      createVideoSettingOperation(VideoEditOperation.text, null),
+      createVideoSettingOperation(VideoEditOperation.audio, null),
+    ]);
+
+    final composition = VideoComposition.fromProject(project);
+
+    expect(composition.text, isNull);
+    expect(composition.audioPath, isNull);
+  });
 }

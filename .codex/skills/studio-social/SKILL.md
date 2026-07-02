@@ -63,6 +63,15 @@ When the user reports a build, runtime or test error:
   library transitive exports.
 - Never label simulated progress as export. Keep drafts locally until a native
   Android/iOS render adapter creates and verifies the output file.
+- Keep the supplied two-level shelf categories (`Edit`, `Effects`, `Stickers`,
+  `Audio`, `Text`) and expose only tools with working controls and preview.
+- Copy picked audio into app-owned storage through `AudioImportService` before
+  adding its path to project history; temporary picker paths are not draft-safe.
+- Rebuild `VideoComposition` from operation history for filters, overlays,
+  soundtrack, transitions and canvas ratio so undo/redo updates preview and
+  timeline from one source of truth.
+- Keep media plugin versions exact while the project targets Dart 3.9.2;
+  caret upgrades previously selected packages requiring Dart 3.10.
 
 ## Preserve UX
 

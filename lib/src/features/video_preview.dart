@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
@@ -9,12 +10,14 @@ import '../core/video_editing.dart';
 class VideoPreview extends StatefulWidget {
   const VideoPreview({
     required this.clip,
+    required this.composition,
     required this.position,
     required this.duration,
     super.key,
   });
 
   final VideoClipEdit clip;
+  final VideoComposition composition;
   final ValueNotifier<Duration> position;
   final ValueNotifier<Duration> duration;
 
@@ -25,6 +28,8 @@ class VideoPreview extends StatefulWidget {
 /// Owns and releases the native decoder used by [VideoPreview].
 class VideoPreviewState extends State<VideoPreview> {
   VideoPlayerController? _controller;
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  String? _loadedAudioPath;
   Object? _error;
 
   @override
@@ -41,6 +46,9 @@ class VideoPreviewState extends State<VideoPreview> {
     } else {
       _applyClipSettings();
     }
+    if (oldWidget.composition.audioPath != widget.composition.audioPath) {
+      _prepareAudio();
+    }
   }
 
   /// Seeks the native decoder while clamping to the selected trim range.
@@ -54,13 +62,23 @@ class VideoPreviewState extends State<VideoPreview> {
             ? end
             : requested;
     await controller.seekTo(target);
+    await _audioPlayer.seek(target - widget.clip.trimStart);
   }
 
   /// Toggles playback without rebuilding the editor or timeline.
   Future<void> togglePlayback() async {
     final controller = _controller;
     if (controller == null || !controller.value.isInitialized) return;
-    controller.value.isPlaying ? await controller.pause() : await controller.play();
+    if (controller.value.isPlaying) {
+      await controller.pause();
+      await _audioPlayer.pause();
+    } else {
+      await _audioPlayer.seek(
+        controller.value.position - widget.clip.trimStart,
+      );
+      await controller.play();
+      if (_loadedAudioPath != null) await _audioPlayer.resume();
+    }
     if (mounted) setState(() {});
   }
 
@@ -82,11 +100,29 @@ class VideoPreviewState extends State<VideoPreview> {
       _controller = controller;
       controller.addListener(_onTick);
       await _applyClipSettings();
+      await _prepareAudio();
       widget.duration.value = widget.clip.trimEnd ?? controller.value.duration;
       setState(() => _error = null);
     } catch (error) {
       await controller.dispose();
       if (mounted) setState(() => _error = error);
+    }
+  }
+
+  /// Loads the selected local soundtrack without copying or decoding it in Dart.
+  Future<void> _prepareAudio() async {
+    final path = widget.composition.audioPath;
+    if (path == null || path.isEmpty) {
+      _loadedAudioPath = null;
+      await _audioPlayer.stop();
+      return;
+    }
+    try {
+      await _audioPlayer.setSource(DeviceFileSource(path));
+      await _audioPlayer.setReleaseMode(ReleaseMode.loop);
+      _loadedAudioPath = path;
+    } catch (_) {
+      _loadedAudioPath = null;
     }
   }
 
@@ -110,7 +146,9 @@ class VideoPreviewState extends State<VideoPreview> {
     final end = widget.clip.trimEnd ?? controller.value.duration;
     if (controller.value.position >= end && controller.value.isPlaying) {
       controller.pause();
+      _audioPlayer.pause();
       controller.seekTo(widget.clip.trimStart);
+      _audioPlayer.seek(Duration.zero);
     }
     widget.position.value = controller.value.position;
   }
@@ -119,6 +157,7 @@ class VideoPreviewState extends State<VideoPreview> {
   void dispose() {
     _controller?.removeListener(_onTick);
     _controller?.dispose();
+    _audioPlayer.dispose();
     super.dispose();
   }
 
@@ -131,15 +170,63 @@ class VideoPreviewState extends State<VideoPreview> {
     if (controller == null || !controller.value.isInitialized) {
       return const Center(child: CircularProgressIndicator());
     }
+    Widget video = Center(
+      child: AspectRatio(
+        aspectRatio: controller.value.aspectRatio,
+        child: VideoPlayer(controller),
+      ),
+    );
+    video = ColorFiltered(
+      colorFilter: ColorFilter.matrix(widget.composition.filter.matrix),
+      child: video,
+    );
     return Stack(
       fit: StackFit.expand,
       children: [
-        Center(
-          child: AspectRatio(
-            aspectRatio: controller.value.aspectRatio,
-            child: VideoPlayer(controller),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 350),
+          transitionBuilder: (child, animation) => switch (
+              widget.composition.transition) {
+            VideoTransition.slide => SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(.12, 0),
+                  end: Offset.zero,
+                ).animate(animation),
+                child: child,
+              ),
+            VideoTransition.zoom => ScaleTransition(
+                scale: Tween<double>(begin: .92, end: 1).animate(animation),
+                child: child,
+              ),
+            _ => FadeTransition(opacity: animation, child: child),
+          },
+          child: KeyedSubtree(
+            key: ValueKey(widget.clip.sourcePath),
+            child: video,
           ),
         ),
+        if (widget.composition.text case final text?)
+          Positioned(
+            left: 20,
+            right: 20,
+            bottom: 72,
+            child: Text(
+              text,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 24,
+                fontWeight: FontWeight.w700,
+                shadows: [Shadow(color: Colors.black, blurRadius: 6)],
+              ),
+            ),
+          ),
+        if (widget.composition.sticker case final sticker?)
+          Positioned(
+            top: 24,
+            right: 24,
+            child: Text(sticker, style: const TextStyle(fontSize: 52)),
+          ),
         Center(
           child: IconButton.filledTonal(
             tooltip: controller.value.isPlaying ? 'Tạm dừng' : 'Phát video',

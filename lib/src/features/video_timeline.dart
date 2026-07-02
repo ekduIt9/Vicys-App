@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as path;
 
 import '../core/models.dart';
+import '../core/video_editing.dart';
 import '../ui/vicys_design.dart';
 
 /// Lightweight timeline transport and source-clip selector.
@@ -32,7 +33,7 @@ class VideoTimeline extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        height: 190,
+        height: 250,
         decoration: const BoxDecoration(
           color: VicysColors.surfaceLow,
           border: Border(top: BorderSide(color: Color(0x14ffffff))),
@@ -48,20 +49,78 @@ class VideoTimeline extends StatelessWidget {
               onRedo: onRedo,
             ),
             const Divider(height: 1),
-            const Padding(
-              padding: EdgeInsets.fromLTRB(14, 10, 14, 6),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: MonoLabel(
-                  'VIDEO',
-                  fontSize: 9,
-                  color: VicysColors.outline,
-                ),
+            Expanded(
+              child: Builder(
+                builder: (context) {
+                  final composition = VideoComposition.fromProject(project);
+                  return ListView(
+                    padding: const EdgeInsets.fromLTRB(14, 8, 14, 12),
+                    children: [
+                      if (composition.text != null)
+                        _LayerRow(
+                          label: 'TEXT',
+                          value: composition.text!,
+                          color: VicysColors.secondary,
+                        ),
+                      if (composition.sticker != null)
+                        _LayerRow(
+                          label: 'STICKER',
+                          value: composition.sticker!,
+                          color: VicysColors.primary,
+                        ),
+                      _VideoTrack(
+                        project: project,
+                        selectedClip: selectedClip,
+                        onSelectedClip: onSelectedClip,
+                      ),
+                      if (composition.audioPath != null)
+                        _LayerRow(
+                          label: 'AUDIO',
+                          value: path.basename(composition.audioPath!),
+                          color: VicysColors.tertiary,
+                        ),
+                      if (composition.transition != VideoTransition.none)
+                        _LayerRow(
+                          label: 'FX',
+                          value: composition.transition.name,
+                          color: VicysColors.primary,
+                        ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+class _VideoTrack extends StatelessWidget {
+  const _VideoTrack({
+    required this.project,
+    required this.selectedClip,
+    required this.onSelectedClip,
+  });
+
+  final MediaProject project;
+  final int selectedClip;
+  final ValueChanged<int> onSelectedClip;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        height: 72,
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 62,
+              child: MonoLabel(
+                'VIDEO',
+                fontSize: 9,
+                color: VicysColors.outline,
               ),
             ),
             Expanded(
               child: ListView.separated(
-                padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
                 scrollDirection: Axis.horizontal,
                 itemCount: project.sourcePaths.length,
                 separatorBuilder: (_, __) => const SizedBox(width: 6),
@@ -69,6 +128,49 @@ class VideoTimeline extends StatelessWidget {
                   label: path.basename(project.sourcePaths[index]),
                   selected: index == selectedClip,
                   onTap: () => onSelectedClip(index),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+class _LayerRow extends StatelessWidget {
+  const _LayerRow({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        height: 34,
+        child: Row(
+          children: [
+            SizedBox(
+              width: 62,
+              child: MonoLabel(label, fontSize: 8, color: VicysColors.outline),
+            ),
+            Expanded(
+              child: Container(
+                height: 25,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                alignment: Alignment.centerLeft,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: .14),
+                  border: Border.all(color: color.withValues(alpha: .5)),
+                  borderRadius: BorderRadius.circular(5),
+                ),
+                child: Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: color, fontSize: 10),
                 ),
               ),
             ),

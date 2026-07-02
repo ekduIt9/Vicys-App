@@ -8,10 +8,12 @@ import '../core/image_effects.dart';
 import '../core/models.dart';
 import '../core/video_editing.dart';
 import '../data/project_repository.dart';
+import '../services/audio_import_service.dart';
 import '../services/services.dart';
 import '../ui/vicys_design.dart';
 import 'video_preview.dart';
 import 'video_timeline.dart';
+import 'video_tool_shelf.dart';
 
 class EditorScreen extends StatefulWidget {
   const EditorScreen({required this.project, required this.repository, super.key});
@@ -25,6 +27,7 @@ class EditorScreen extends StatefulWidget {
 class _EditorScreenState extends State<EditorScreen> {
   late final EditHistory history = EditHistory(widget.project);
   late final AutosaveController autosave = AutosaveController(widget.repository);
+  final audioImportService = AudioImportService();
   late ImageEffectSettings imageEffects =
       ImageEffectSettings.fromProject(widget.project);
   final videoPosition = ValueNotifier<Duration>(Duration.zero);
@@ -96,8 +99,26 @@ class _EditorScreenState extends State<EditorScreen> {
         case 'Âm lượng':
           _showVolumeEditor();
           return;
+        case 'Màu':
+          _showFilterEditor();
+          return;
+        case 'Chữ':
+          _showTextEditor();
+          return;
+        case 'Sticker':
+          _showStickerEditor();
+          return;
+        case 'Nhạc':
+          _pickAudio();
+          return;
+        case 'Chuyển cảnh':
+          _showTransitionEditor();
+          return;
+        case 'Canvas':
+          _showCanvasEditor();
+          return;
         default:
-          _showComingSoon(tool);
+          _showMessage('Không tìm thấy công cụ $tool.');
           return;
       }
     }
@@ -106,6 +127,8 @@ class _EditorScreenState extends State<EditorScreen> {
 
   VideoClipEdit get selectedVideoClip =>
       VideoClipEdit.fromProject(history.project, selectedClip);
+  VideoComposition get videoComposition =>
+      VideoComposition.fromProject(history.project);
 
   /// Opens trim controls and commits one operation when the user confirms.
   Future<void> _showTrimEditor() async {
@@ -147,7 +170,7 @@ class _EditorScreenState extends State<EditorScreen> {
         ),
       ),
     );
-    if (result == null) return;
+    if (!mounted || result == null) return;
     applyVideoOperation(createTrimOperation(
       clipIndex: selectedClip,
       start: Duration(milliseconds: result.start.round()),
@@ -179,7 +202,7 @@ class _EditorScreenState extends State<EditorScreen> {
       label: (value) => '${value.toStringAsFixed(2)}x',
       onChanged: (value) => speed = value,
     );
-    if (result != null) {
+    if (mounted && result != null) {
       applyVideoOperation(
         createSpeedOperation(clipIndex: selectedClip, speed: result),
       );
@@ -197,10 +220,176 @@ class _EditorScreenState extends State<EditorScreen> {
       label: (value) => '${(value * 100).round()}%',
       onChanged: (value) => volume = value,
     );
-    if (result != null) {
+    if (mounted && result != null) {
       applyVideoOperation(
         createVolumeOperation(clipIndex: selectedClip, volume: result),
       );
+    }
+  }
+
+  Future<void> _showFilterEditor() async {
+    const labels = {
+      VideoFilter.original: 'Gốc',
+      VideoFilter.vivid: 'Rực rỡ',
+      VideoFilter.mono: 'Đen trắng',
+      VideoFilter.vintage: 'Cổ điển',
+      VideoFilter.cool: 'Lạnh',
+      VideoFilter.warm: 'Ấm',
+      VideoFilter.cinematic: 'Điện ảnh',
+    };
+    final selected = await showModalBottomSheet<VideoFilter>(
+      context: context,
+      builder: (context) => _ChoiceSheet<VideoFilter>(
+        title: 'Bộ lọc video',
+        values: VideoFilter.values,
+        selected: videoComposition.filter,
+        label: (value) => labels[value]!,
+      ),
+    );
+    if (mounted && selected != null) {
+      applyVideoOperation(createVideoSettingOperation(
+        VideoEditOperation.filter,
+        selected.name,
+      ));
+    }
+  }
+
+  Future<void> _showTextEditor() async {
+    final controller = TextEditingController(text: videoComposition.text);
+    final text = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Thêm chữ'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 120,
+          decoration: const InputDecoration(hintText: 'Nhập nội dung'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Hủy'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('Áp dụng'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (mounted && text != null) {
+      applyVideoOperation(createVideoSettingOperation(
+        VideoEditOperation.text,
+        text.isEmpty ? null : text,
+      ));
+    }
+  }
+
+  Future<void> _showStickerEditor() async {
+    const stickers = ['', '✨', '❤️', '🔥', '😎', '🎉', '⭐', '🌈', '🚀'];
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) => _ChoiceSheet<String>(
+        title: 'Sticker',
+        values: stickers,
+        selected: videoComposition.sticker ?? '',
+        label: (value) => value.isEmpty ? 'Bỏ sticker' : value,
+      ),
+    );
+    if (mounted && selected != null) {
+      applyVideoOperation(createVideoSettingOperation(
+        VideoEditOperation.sticker,
+        selected.isEmpty ? null : selected,
+      ));
+    }
+  }
+
+  /// Imports a soundtrack into durable storage and commits its local path.
+  Future<void> _pickAudio() async {
+    try {
+      if (videoComposition.audioPath != null) {
+        final action = await showModalBottomSheet<String>(
+          context: context,
+          builder: (context) => _ChoiceSheet<String>(
+            title: 'Nhạc nền',
+            values: const ['replace', 'remove'],
+            selected: null,
+            label: _audioActionLabel,
+          ),
+        );
+        if (!mounted || action == null) return;
+        if (action == 'remove') {
+          applyVideoOperation(createVideoSettingOperation(
+            VideoEditOperation.audio,
+            null,
+          ));
+          return;
+        }
+      }
+      final audioPath = await audioImportService.pickAndPersist();
+      if (!mounted || audioPath == null) return;
+      applyVideoOperation(createVideoSettingOperation(
+        VideoEditOperation.audio,
+        audioPath,
+      ));
+    } catch (_) {
+      if (mounted) {
+        _showMessage('Không thể mở tệp nhạc. Draft video vẫn an toàn.');
+      }
+    }
+  }
+
+  static String _audioActionLabel(String action) =>
+      action == 'remove' ? 'Bỏ nhạc' : 'Thay nhạc';
+
+  Future<void> _showTransitionEditor() async {
+    const labels = {
+      VideoTransition.none: 'Không',
+      VideoTransition.fade: 'Mờ dần',
+      VideoTransition.slide: 'Trượt',
+      VideoTransition.zoom: 'Thu phóng',
+    };
+    final selected = await showModalBottomSheet<VideoTransition>(
+      context: context,
+      builder: (context) => _ChoiceSheet<VideoTransition>(
+        title: 'Chuyển cảnh',
+        values: VideoTransition.values,
+        selected: videoComposition.transition,
+        label: (value) => labels[value]!,
+      ),
+    );
+    if (mounted && selected != null) {
+      applyVideoOperation(createVideoSettingOperation(
+        VideoEditOperation.transition,
+        selected.name,
+      ));
+    }
+  }
+
+  Future<void> _showCanvasEditor() async {
+    const ratios = <double>[9 / 16, 1, 4 / 5, 16 / 9];
+    const labels = <double, String>{
+      9 / 16: '9:16',
+      1: '1:1',
+      4 / 5: '4:5',
+      16 / 9: '16:9',
+    };
+    final selected = await showModalBottomSheet<double>(
+      context: context,
+      builder: (context) => _ChoiceSheet<double>(
+        title: 'Tỷ lệ canvas',
+        values: ratios,
+        selected: videoComposition.aspectRatio,
+        label: (value) => labels[value]!,
+      ),
+    );
+    if (mounted && selected != null) {
+      applyVideoOperation(createVideoSettingOperation(
+        VideoEditOperation.canvas,
+        selected,
+      ));
     }
   }
 
@@ -243,9 +432,6 @@ class _EditorScreenState extends State<EditorScreen> {
         ),
       );
 
-  void _showComingSoon(String tool) =>
-      _showMessage('$tool sẽ được bổ sung ở bước render nâng cao.');
-
   void _showMessage(String message) =>
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
 
@@ -272,12 +458,14 @@ class _EditorScreenState extends State<EditorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final tools = history.project.kind == ProjectKind.image
-        ? const [('Cắt', Icons.crop), ('Màu', Icons.tune), ('Filter', Icons.filter_vintage),
-            ('Chữ', Icons.text_fields), ('Sticker', Icons.emoji_emotions_outlined), ('Vẽ', Icons.brush)]
-        : const [('Cắt', Icons.content_cut), ('Tách', Icons.call_split), ('Tốc độ', Icons.speed),
-            ('Âm lượng', Icons.volume_up_outlined), ('Màu', Icons.tune), ('Chữ', Icons.text_fields),
-            ('Nhạc', Icons.music_note), ('Chuyển cảnh', Icons.auto_awesome)];
+    const imageTools = [
+      ('Cắt', Icons.crop),
+      ('Màu', Icons.tune),
+      ('Filter', Icons.filter_vintage),
+      ('Chữ', Icons.text_fields),
+      ('Sticker', Icons.emoji_emotions_outlined),
+      ('Vẽ', Icons.brush),
+    ];
     return Scaffold(
       appBar: AppBar(
         leadingWidth: 70,
@@ -306,7 +494,9 @@ class _EditorScreenState extends State<EditorScreen> {
       ),
       body: Column(children: [
         Expanded(child: Center(child: AspectRatio(
-          aspectRatio: history.project.kind == ProjectKind.image ? 1 : 9 / 16,
+          aspectRatio: history.project.kind == ProjectKind.image
+              ? 1
+              : videoComposition.aspectRatio,
           child: Container(
             decoration: BoxDecoration(color: const Color(0xff202027), borderRadius: BorderRadius.circular(12)),
             clipBehavior: Clip.antiAlias,
@@ -315,6 +505,7 @@ class _EditorScreenState extends State<EditorScreen> {
                 ? VideoPreview(
                     key: videoPreviewKey,
                     clip: selectedVideoClip,
+                    composition: videoComposition,
                     position: videoPosition,
                     duration: videoDuration,
                   )
@@ -345,17 +536,19 @@ class _EditorScreenState extends State<EditorScreen> {
             onCommit: commitImageEffects,
             onClose: () => setState(() => imagePanel = null),
           )
+        else if (history.project.kind == ProjectKind.video)
+          VideoToolShelf(onToolSelected: handleTool)
         else
           SizedBox(height: 92, child: ListView.separated(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             scrollDirection: Axis.horizontal,
-            itemCount: tools.length,
+            itemCount: imageTools.length,
             separatorBuilder: (_, __) => const SizedBox(width: 8),
             itemBuilder: (_, index) => InkWell(
-              onTap: () => handleTool(tools[index].$1),
+              onTap: () => handleTool(imageTools[index].$1),
               borderRadius: BorderRadius.circular(10),
               child: SizedBox(width: 68, child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Icon(tools[index].$2), const SizedBox(height: 6), Text(tools[index].$1, maxLines: 1),
+                Icon(imageTools[index].$2), const SizedBox(height: 6), Text(imageTools[index].$1, maxLines: 1),
               ])),
             ),
           )),
@@ -677,6 +870,48 @@ class _Adjustment {
   final double minimum;
   final double maximum;
   final ImageEffectSettings Function(double value) update;
+}
+
+class _ChoiceSheet<T> extends StatelessWidget {
+  const _ChoiceSheet({
+    required this.title,
+    required this.values,
+    required this.selected,
+    required this.label,
+  });
+
+  final String title;
+  final List<T> values;
+  final T? selected;
+  final String Function(T value) label;
+
+  @override
+  Widget build(BuildContext context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: values
+                    .map(
+                      (value) => ChoiceChip(
+                        selected: value == selected,
+                        label: Text(label(value)),
+                        onSelected: (_) => Navigator.pop(context, value),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ],
+          ),
+        ),
+      );
 }
 
 class _MissingMedia extends StatelessWidget {

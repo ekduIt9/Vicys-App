@@ -66,13 +66,16 @@ push notification thật phải kiểm tra bằng Firebase project phát triển
   camera chụp ảnh/quay video, nhập nhiều ảnh/video từ thư viện, lưu media bền vững,
   hiệu ứng ảnh GPU không phá hủy (preset, sáng, tương phản, bão hòa, nhiệt độ,
   blur, vignette), preview video native, seek/play, trim, split marker, tốc độ,
-  âm lượng, autosave, undo/redo, manifest có version, UI editor/timeline,
+  âm lượng, filter video, chữ/sticker overlay, nhạc nền local, transition
+  preview, canvas đa tỷ lệ, autosave, undo/redo, manifest có version,
+  timeline đa lớp và tool shelf theo UI mẫu,
   Firestore/Storage Rules và FCM Functions.
 - Shell Camera–Library–Studio, tìm kiếm project, thumbnail media thật, camera
   filter studio với 14 preset, 4 nhóm hiệu ứng, intensity, EV và timeline video
   nhiều track.
-- Cần tích hợp tiếp: shader/filter, native render video thật, ghép clip,
-  text/music/transition, OAuth, storage upload có resume, Firebase repositories, share-link
+- Cần tích hợp tiếp: native render video thật, ghép/sắp xếp segment sau split,
+  keyframe, animation nâng cao, AI retouch/remove background, OAuth, storage
+  upload có resume, Firebase repositories, share-link
   server function, moderation dashboard và telemetry.
 
 Sau khi chạy `flutter create .`, thêm vào iOS `Info.plist`:

@@ -68,7 +68,146 @@ abstract final class VideoEditOperation {
   static const speed = 'video_speed';
   static const volume = 'video_volume';
   static const delete = 'video_delete';
+  static const filter = 'video_filter';
+  static const text = 'video_text';
+  static const sticker = 'video_sticker';
+  static const audio = 'video_audio';
+  static const transition = 'video_transition';
+  static const canvas = 'video_canvas';
 }
+
+/// Effective project-wide composition rebuilt from non-destructive operations.
+class VideoComposition {
+  const VideoComposition({
+    this.filter = VideoFilter.original,
+    this.text,
+    this.sticker,
+    this.audioPath,
+    this.transition = VideoTransition.none,
+    this.aspectRatio = 9 / 16,
+  });
+
+  final VideoFilter filter;
+  final String? text;
+  final String? sticker;
+  final String? audioPath;
+  final VideoTransition transition;
+  final double aspectRatio;
+  static const _unset = Object();
+
+  /// Replays supported operations, with the latest value winning per tool.
+  factory VideoComposition.fromProject(MediaProject project) {
+    var result = const VideoComposition();
+    for (final operation in project.operations) {
+      final value = operation.parameters['value'];
+      switch (operation.type) {
+        case VideoEditOperation.filter:
+          result = result._copy(filter: VideoFilter.parse(value));
+        case VideoEditOperation.text:
+          result = result._copy(text: value is String ? value : null);
+        case VideoEditOperation.sticker:
+          result = result._copy(sticker: value is String ? value : null);
+        case VideoEditOperation.audio:
+          result = result._copy(audioPath: value is String ? value : null);
+        case VideoEditOperation.transition:
+          result = result._copy(transition: VideoTransition.parse(value));
+        case VideoEditOperation.canvas:
+          result = result._copy(aspectRatio: _ratio(value));
+      }
+    }
+    return result;
+  }
+
+  VideoComposition _copy({
+    VideoFilter? filter,
+    Object? text = _unset,
+    Object? sticker = _unset,
+    Object? audioPath = _unset,
+    VideoTransition? transition,
+    double? aspectRatio,
+  }) =>
+      VideoComposition(
+        filter: filter ?? this.filter,
+        text: identical(text, _unset) ? this.text : text as String?,
+        sticker: identical(sticker, _unset) ? this.sticker : sticker as String?,
+        audioPath:
+            identical(audioPath, _unset) ? this.audioPath : audioPath as String?,
+        transition: transition ?? this.transition,
+        aspectRatio: aspectRatio ?? this.aspectRatio,
+      );
+
+  static double _ratio(Object? value) {
+    final ratio = value is num ? value.toDouble() : 9 / 16;
+    return ratio > 0 ? ratio : 9 / 16;
+  }
+}
+
+enum VideoFilter {
+  original,
+  vivid,
+  mono,
+  vintage,
+  cool,
+  warm,
+  cinematic;
+
+  static VideoFilter parse(Object? value) {
+    for (final item in VideoFilter.values) {
+      if (item.name == value) return item;
+    }
+    return VideoFilter.original;
+  }
+
+  /// Returns a 4x5 color matrix used by Flutter's GPU composition layer.
+  List<double> get matrix => switch (this) {
+        VideoFilter.original => _identity,
+        VideoFilter.vivid => const [
+            1.2, 0, 0, 0, 0, 0, 1.16, 0, 0, 0, 0, 0, 1.2, 0, 0, 0, 0, 0, 1, 0,
+          ],
+        VideoFilter.mono => const [
+            .2126, .7152, .0722, 0, 0, .2126, .7152, .0722, 0, 0,
+            .2126, .7152, .0722, 0, 0, 0, 0, 0, 1, 0,
+          ],
+        VideoFilter.vintage => const [
+            .9, .18, .04, 0, 8, .08, .82, .04, 0, 4,
+            .03, .12, .72, 0, -2, 0, 0, 0, 1, 0,
+          ],
+        VideoFilter.cool => const [
+            .94, 0, .03, 0, -3, 0, 1, .04, 0, 0,
+            .02, .04, 1.08, 0, 7, 0, 0, 0, 1, 0,
+          ],
+        VideoFilter.warm => const [
+            1.1, .04, 0, 0, 8, 0, 1.02, 0, 0, 3,
+            0, 0, .9, 0, -4, 0, 0, 0, 1, 0,
+          ],
+        VideoFilter.cinematic => const [
+            1.06, .02, -.04, 0, 2, -.03, 1.02, .04, 0, 0,
+            -.04, .1, 1.08, 0, 3, 0, 0, 0, 1, 0,
+          ],
+      };
+
+  static const _identity = <double>[
+    1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0,
+  ];
+}
+
+enum VideoTransition {
+  none,
+  fade,
+  slide,
+  zoom;
+
+  static VideoTransition parse(Object? value) {
+    for (final item in VideoTransition.values) {
+      if (item.name == value) return item;
+    }
+    return VideoTransition.none;
+  }
+}
+
+/// Creates a project-wide operation with a serializable scalar value.
+EditOperation createVideoSettingOperation(String type, Object? value) =>
+    EditOperation(type: type, parameters: {'value': value});
 
 /// Creates a validated trim operation without modifying the source file.
 EditOperation createTrimOperation({
