@@ -26,44 +26,95 @@ class SynthRequest {
 
 /// Low-latency polyphonic preview engine backed by generated PCM WAV buffers.
 class MusicAudioEngine {
-  final Set<AudioPlayer> _voices = {};
-  static const maxVoices = 16;
+  final List<_VoiceSlot> _voices = List.generate(
+    maxVoices,
+    (_) => _VoiceSlot(AudioPlayer()),
+  );
+  final Map<String, Future<Uint8List>> _sampleCache = {};
+  static const maxVoices = 8;
+  static const maxCachedSamples = 64;
+  var _playOrder = 0;
+  var _disposed = false;
 
-  /// Synthesizes a note off the UI isolate and plays it as one disposable voice.
+  /// Synthesizes and caches a note off the UI isolate, then plays it through a
+  /// bounded reusable voice pool. When all voices are busy, the oldest voice is
+  /// stopped and reused. Calls after [dispose] are ignored.
   Future<void> playNote(
     InstrumentNote note,
     MixerState mixer, {
     int durationMs = 520,
   }) async {
-    if (_voices.length >= maxVoices) {
-      final oldest = _voices.first;
-      _voices.remove(oldest);
-      await oldest.dispose();
+    if (_disposed) return;
+    final request = SynthRequest(
+      frequency: note.frequency,
+      durationMs: durationMs,
+      shape: _shapeFor(note.instrument),
+      volume: (mixer.volumeFor(note.instrument) * mixer.master)
+          .clamp(0, 1)
+          .toDouble(),
+      drive: mixer.drive.clamp(0, 1).toDouble(),
+    );
+    final cacheKey = _cacheKey(request);
+    if (_sampleCache.length >= maxCachedSamples &&
+        !_sampleCache.containsKey(cacheKey)) {
+      _sampleCache.clear();
     }
-    final bytes = await Isolate.run(() => _encodeWav(SynthRequest(
-          frequency: note.frequency,
-          durationMs: durationMs,
-          shape: _shapeFor(note.instrument),
-          volume: mixer.volumeFor(note.instrument) * mixer.master,
-          drive: mixer.drive,
-        )));
-    final player = AudioPlayer();
-    _voices.add(player);
-    player.onPlayerComplete.first.then((_) async {
-      _voices.remove(player);
-      await player.dispose();
+    late final Uint8List bytes;
+    try {
+      bytes = await _sampleCache.putIfAbsent(
+        cacheKey,
+        () => Isolate.run(() => _encodeWav(request)),
+      );
+    } catch (_) {
+      _sampleCache.remove(cacheKey);
+      return;
+    }
+    if (_disposed) return;
+
+    _VoiceSlot? available;
+    for (final voice in _voices) {
+      if (!voice.busy) {
+        available = voice;
+        break;
+      }
+    }
+    final slot = available ??
+        _voices.reduce((a, b) => a.order <= b.order ? a : b);
+    slot.busy = true;
+    slot.order = ++_playOrder;
+    final generation = ++slot.generation;
+
+    try {
+      await slot.player.stop();
+      if (_disposed || generation != slot.generation) return;
+      await slot.player.play(
+        BytesSource(bytes),
+        mode: PlayerMode.lowLatency,
+      );
+    } catch (_) {
+      if (generation == slot.generation) slot.busy = false;
+      return;
+    }
+    Timer(Duration(milliseconds: durationMs + 120), () {
+      if (generation == slot.generation) slot.busy = false;
     });
-    await player.play(BytesSource(bytes));
   }
 
   /// Stops and releases every active native audio voice.
   Future<void> dispose() async {
-    final voices = _voices.toList(growable: false);
-    _voices.clear();
-    for (final voice in voices) {
-      await voice.dispose();
+    _disposed = true;
+    _sampleCache.clear();
+    for (final voice in _voices) {
+      voice.generation++;
+      voice.busy = false;
+      await voice.player.dispose();
     }
   }
+
+  static String _cacheKey(SynthRequest request) =>
+      '${request.frequency.toStringAsFixed(2)}:'
+      '${request.durationMs}:${request.shape.index}:'
+      '${request.volume.toStringAsFixed(2)}:${request.drive.toStringAsFixed(2)}';
 
   static WaveShape _shapeFor(InstrumentType instrument) => switch (instrument) {
         InstrumentType.piano => WaveShape.triangle,
@@ -72,6 +123,15 @@ class MusicAudioEngine {
         InstrumentType.synth => WaveShape.saw,
         InstrumentType.drums => WaveShape.noise,
       };
+}
+
+class _VoiceSlot {
+  _VoiceSlot(this.player);
+
+  final AudioPlayer player;
+  var busy = false;
+  var order = 0;
+  var generation = 0;
 }
 
 /// Renders one short mono voice without touching plugin or UI state.

@@ -17,7 +17,9 @@ mastering và export. Audio phải phản hồi nhanh và không khóa UI.
 ## Chuẩn audio
 
 - Preview tối thiểu 22.05 kHz/16-bit; export mục tiêu 44.1 kHz/24-bit.
-- Giới hạn polyphony và giải phóng voice khi hoàn tất.
+- Dùng voice-pool cố định, tái sử dụng player và đánh dấu voice trước mọi
+  `await`; không tạo một native player mới cho mỗi lần chạm.
+- Cache sample preview có giới hạn để tránh render lại WAV cho từng lần bấm.
 - Không tạo buffer dài trên UI isolate.
 - Clamp mixer input 0–1 và limiter trước output.
 - Phản hồi UI dưới 50 ms; audio mục tiêu dưới 20 ms trên thiết bị.
@@ -31,8 +33,8 @@ mastering và export. Audio phải phản hồi nhanh và không khóa UI.
   nốt khi chưa có pitch/onset analysis.
 - Guitar: giao diện thân gỗ, nút hợp âm và 6 dây có thể chạm riêng.
 - Dubstep: 16 performance pad và step-grid bật/tắt được từng ô.
-- Không dùng lại một generic grid cho cả ba nhạc cụ. Trên màn hình hẹp,
-  workspace dạng ngang phải tự chuyển thành bố cục xếp dọc.
+- Không dùng lại một generic grid cho cả ba nhạc cụ. Toàn bộ workstation khóa
+  landscape để ưu tiên nhiều phím, dây và pad có thể chơi trực tiếp.
 
 ## Function
 

@@ -58,6 +58,13 @@ class _MusicStudioScreenState extends State<MusicStudioScreen> {
     InstrumentNote(label: 'A4', frequency: 440, instrument: InstrumentType.piano),
     InstrumentNote(label: 'B4', frequency: 493.88, instrument: InstrumentType.piano),
     InstrumentNote(label: 'C5', frequency: 523.25, instrument: InstrumentType.piano),
+    InstrumentNote(label: 'D5', frequency: 587.33, instrument: InstrumentType.piano),
+    InstrumentNote(label: 'E5', frequency: 659.25, instrument: InstrumentType.piano),
+    InstrumentNote(label: 'F5', frequency: 698.46, instrument: InstrumentType.piano),
+    InstrumentNote(label: 'G5', frequency: 783.99, instrument: InstrumentType.piano),
+    InstrumentNote(label: 'A5', frequency: 880, instrument: InstrumentType.piano),
+    InstrumentNote(label: 'B5', frequency: 987.77, instrument: InstrumentType.piano),
+    InstrumentNote(label: 'C6', frequency: 1046.5, instrument: InstrumentType.piano),
   ];
 
   static const guitarNotes = [
@@ -329,6 +336,7 @@ class _PianoStudio extends StatelessWidget {
                 builder: (context, snapshot) => _BeatGuide(
                   active: snapshot.data == true,
                   height: 190,
+                  laneCount: notes.length,
                 ),
               ),
               _PianoKeyboard(
@@ -352,7 +360,8 @@ class _PianoKeyboard extends StatelessWidget {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final keyWidth = constraints.maxWidth / notes.length;
-            const blackAfter = [0, 1, 3, 4, 5];
+            final blackAfter = List.generate(notes.length - 1, (index) => index)
+                .where((index) => !const {2, 6}.contains(index % 7));
             return Stack(
               children: [
                 Row(
@@ -869,43 +878,32 @@ class _TrackTransport extends StatelessWidget {
                 duration.inMilliseconds.clamp(1, 1 << 31).toDouble();
             final current =
                 position.inMilliseconds.clamp(0, maximum.toInt()).toDouble();
-            return Column(
+            return Row(
               children: [
-                Row(
-                  children: [
-                    StreamBuilder<bool>(
-                      stream: service.isPlaying,
-                      initialData: false,
-                      builder: (context, snapshot) => IconButton.filled(
-                        onPressed: service.toggle,
-                        icon: Icon(
-                          snapshot.data == true
-                              ? Icons.pause
-                              : Icons.play_arrow,
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: Slider(
-                        value: current,
-                        max: maximum,
-                        onChanged: (value) => service.seek(
-                          Duration(milliseconds: value.round()),
-                        ),
-                      ),
-                    ),
-                    Text(
-                      '${_clock(position)} / ${_clock(duration)}',
-                      style: const TextStyle(fontSize: 10),
-                    ),
-                  ],
-                ),
                 StreamBuilder<bool>(
                   stream: service.isPlaying,
                   initialData: false,
-                  builder: (context, snapshot) => _BeatGuide(
-                    active: snapshot.data == true,
+                  builder: (context, snapshot) => IconButton.filled(
+                    onPressed: service.toggle,
+                    icon: Icon(
+                      snapshot.data == true
+                          ? Icons.pause
+                          : Icons.play_arrow,
+                    ),
                   ),
+                ),
+                Expanded(
+                  child: Slider(
+                    value: current,
+                    max: maximum,
+                    onChanged: (value) => service.seek(
+                      Duration(milliseconds: value.round()),
+                    ),
+                  ),
+                ),
+                Text(
+                  '${_clock(position)} / ${_clock(duration)}',
+                  style: const TextStyle(fontSize: 10),
                 ),
               ],
             );
@@ -921,9 +919,14 @@ class _TrackTransport extends StatelessWidget {
 }
 
 class _BeatGuide extends StatefulWidget {
-  const _BeatGuide({required this.active, this.height = 58});
+  const _BeatGuide({
+    required this.active,
+    this.height = 58,
+    this.laneCount = 8,
+  });
   final bool active;
   final double height;
+  final int laneCount;
 
   @override
   State<_BeatGuide> createState() => _BeatGuideState();
@@ -960,20 +963,21 @@ class _BeatGuideState extends State<_BeatGuide>
         child: AnimatedBuilder(
           animation: controller,
           builder: (context, _) => CustomPaint(
-            painter: _BeatGuidePainter(controller.value),
+            painter: _BeatGuidePainter(controller.value, widget.laneCount),
           ),
         ),
       );
 }
 
 class _BeatGuidePainter extends CustomPainter {
-  const _BeatGuidePainter(this.progress);
+  const _BeatGuidePainter(this.progress, this.laneCount);
   final double progress;
+  final int laneCount;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final laneWidth = size.width / 8;
-    for (var lane = 0; lane < 8; lane++) {
+    final laneWidth = size.width / laneCount;
+    for (var lane = 0; lane < laneCount; lane++) {
       final paint = Paint()
         ..color = lane.isEven
             ? const Color(0xff33d6e8)

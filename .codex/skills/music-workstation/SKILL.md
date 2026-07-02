@@ -24,7 +24,11 @@ description: Build and maintain the PulseForge Flutter mobile music workstation,
 
 ## Audio safety and performance
 
-- Bound polyphony and release every player, stream, timer and audio session.
+- Bound polyphony with a fixed reusable voice pool; do not allocate one native
+  player per tap. Reserve or mark a voice before awaiting stop/play so rapid
+  concurrent taps cannot bypass the voice limit.
+- Cache generated preview samples with a strict size cap and release every
+  player, stream, timer and audio session.
 - Clamp gains; apply limiter before output; prevent NaN and denormal values.
 - Avoid allocations in recurring sequencer ticks and audio callbacks.
 - Make BPM changes reschedule cleanly without overlapping timers.
@@ -40,8 +44,8 @@ description: Build and maintain the PulseForge Flutter mobile music workstation,
 - Piano uses a falling-lane beat guide above a touch keyboard. Guitar exposes
   chord triggers and six individually playable strings. Dubstep exposes 16
   performance pads and a tappable step-pattern grid.
-- Keep controls usable in portrait and landscape. Switch wide workspaces from
-  rows to stacked sections before they overflow on narrow phones.
+- The workstation is landscape-only. Keep the instrument surface wide and
+  prioritize playable keys, strings and pads over decorative vertical content.
 - Preserve the shared backing-track transport when changing an instrument
   workspace so users can import a device track and play along.
 
