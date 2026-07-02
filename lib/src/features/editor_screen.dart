@@ -369,26 +369,31 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Future<void> _showCanvasEditor() async {
-    const ratios = <double>[9 / 16, 1, 4 / 5, 16 / 9];
-    const labels = <double, String>{
-      9 / 16: '9:16',
-      1: '1:1',
-      4 / 5: '4:5',
-      16 / 9: '16:9',
-    };
-    final selected = await showModalBottomSheet<double>(
+    const options = <({double ratio, String label})>[
+      (ratio: 9 / 16, label: '9:16'),
+      (ratio: 1, label: '1:1'),
+      (ratio: 4 / 5, label: '4:5'),
+      (ratio: 16 / 9, label: '16:9'),
+    ];
+    final current = options.firstWhere(
+      (option) =>
+          (option.ratio - videoComposition.aspectRatio).abs() < .001,
+      orElse: () => options.first,
+    );
+    final selected =
+        await showModalBottomSheet<({double ratio, String label})>(
       context: context,
-      builder: (context) => _ChoiceSheet<double>(
+      builder: (context) => _ChoiceSheet<({double ratio, String label})>(
         title: 'Tỷ lệ canvas',
-        values: ratios,
-        selected: videoComposition.aspectRatio,
-        label: (value) => labels[value]!,
+        values: options,
+        selected: current,
+        label: (option) => option.label,
       ),
     );
     if (mounted && selected != null) {
       applyVideoOperation(createVideoSettingOperation(
         VideoEditOperation.canvas,
-        selected,
+        selected.ratio,
       ));
     }
   }

@@ -72,6 +72,8 @@ When the user reports a build, runtime or test error:
   timeline from one source of truth.
 - Keep media plugin versions exact while the project targets Dart 3.9.2;
   caret upgrades previously selected packages requiring Dart 3.10.
+- Represent labeled canvas ratios as records instead of keys in a const
+  `Map<double, String>`; computed double keys cannot be const-evaluated.
 
 ## Preserve UX
 
