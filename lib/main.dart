@@ -2,9 +2,9 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 
-import 'src/app.dart';
 import 'src/core/app_config.dart';
 import 'src/services/firebase_backend.dart';
+import 'src/vicys_app.dart';
 
 /// Handles data notifications while the app process is backgrounded.
 ///
@@ -32,5 +32,5 @@ Future<void> main() async {
     }
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
   }
-  runApp(const StudioSocialApp());
+  runApp(const VicysApp());
 }

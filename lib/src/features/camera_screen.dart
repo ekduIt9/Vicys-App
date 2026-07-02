@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 
+import '../core/image_effects.dart';
 import '../core/models.dart';
 import '../data/project_repository.dart';
 import '../services/media_import_service.dart';
@@ -36,6 +37,7 @@ class _CameraPageState extends State<CameraPage>
   bool _recording = false;
   Duration _recordingDuration = Duration.zero;
   Timer? _recordingTimer;
+  ImagePreset _cameraPreset = ImagePreset.original;
 
   @override
   void initState() {
@@ -199,11 +201,25 @@ class _CameraPageState extends State<CameraPage>
     final kind = media.any((item) => item.kind == ProjectKind.video)
         ? ProjectKind.video
         : ProjectKind.image;
-    final project = await widget.repository.create(
+    var project = await widget.repository.create(
       kind,
       sourcePaths: media.map((item) => item.path).toList(growable: false),
       title: media.first.originalName,
     );
+    if (_cameraPreset != ImagePreset.original) {
+      final operation = kind == ProjectKind.image
+          ? ImageEffectSettings(preset: _cameraPreset).toOperation()
+          : EditOperation(
+              type: 'camera_filter',
+              parameters: {'preset': _cameraPreset.name},
+            );
+      project = project.copyWith(
+        operations: [operation],
+        revision: project.revision + 1,
+        updatedAt: DateTime.now(),
+      );
+      await widget.repository.save(project);
+    }
     if (!mounted) return;
     await Navigator.of(context).push(MaterialPageRoute<void>(
       builder: (_) => EditorScreen(
@@ -272,7 +288,14 @@ class _CameraPageState extends State<CameraPage>
       return const Center(child: CircularProgressIndicator());
     }
     return Stack(fit: StackFit.expand, children: [
-      Center(child: CameraPreview(controller)),
+      Center(
+        child: ColorFiltered(
+          colorFilter: ColorFilter.matrix(
+            ImageEffectSettings(preset: _cameraPreset).colorMatrix,
+          ),
+          child: CameraPreview(controller),
+        ),
+      ),
       Positioned(
         top: 12,
         left: 16,
@@ -297,10 +320,15 @@ class _CameraPageState extends State<CameraPage>
         ]),
       ),
       Positioned(
-        bottom: 20,
+        bottom: 16,
         left: 0,
         right: 0,
         child: Column(children: [
+          _CameraFilterStrip(
+            selected: _cameraPreset,
+            onSelected: (preset) => setState(() => _cameraPreset = preset),
+          ),
+          const SizedBox(height: 10),
           SegmentedButton<CaptureMode>(
             segments: const [
               ButtonSegment(value: CaptureMode.photo, label: Text('ẢNH')),
@@ -344,6 +372,71 @@ class _CameraPageState extends State<CameraPage>
         ]),
       ),
     ]);
+  }
+}
+
+class _CameraFilterStrip extends StatelessWidget {
+  const _CameraFilterStrip({
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final ImagePreset selected;
+  final ValueChanged<ImagePreset> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    const labels = {
+      ImagePreset.original: 'None',
+      ImagePreset.vivid: 'Neon',
+      ImagePreset.mono: 'Mono',
+      ImagePreset.vintage: 'Golden',
+      ImagePreset.cool: 'Mist',
+    };
+    return SizedBox(
+      height: 72,
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(horizontal: 18),
+        scrollDirection: Axis.horizontal,
+        itemCount: ImagePreset.values.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 13),
+        itemBuilder: (_, index) {
+          final preset = ImagePreset.values[index];
+          final active = preset == selected;
+          return GestureDetector(
+            onTap: () => onSelected(preset),
+            child: SizedBox(
+              width: 58,
+              child: Column(children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: const Color(0xaa202027),
+                    border: Border.all(
+                      color: active
+                          ? const Color(0xffc0c1ff)
+                          : Colors.white24,
+                      width: active ? 3 : 1,
+                    ),
+                  ),
+                  child: Icon(
+                    preset == ImagePreset.original
+                        ? Icons.block
+                        : Icons.lens_blur,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(labels[preset]!, style: const TextStyle(fontSize: 10)),
+              ]),
+            ),
+          );
+        },
+      ),
+    );
   }
 }
 

@@ -8,6 +8,8 @@ import '../core/image_effects.dart';
 import '../core/models.dart';
 import '../data/project_repository.dart';
 import '../services/services.dart';
+import '../ui/vicys_design.dart';
+import 'video_timeline.dart';
 
 class EditorScreen extends StatefulWidget {
   const EditorScreen({required this.project, required this.repository, super.key});
@@ -93,6 +95,12 @@ class _EditorScreenState extends State<EditorScreen> {
     );
   }
 
+  /// Persists current operations before returning to the media library.
+  Future<void> finish() async {
+    await widget.repository.save(history.project);
+    if (mounted) Navigator.of(context).pop();
+  }
+
   @override
   void dispose() {
     autosave.dispose();
@@ -109,7 +117,12 @@ class _EditorScreenState extends State<EditorScreen> {
             ('Màu', Icons.tune), ('Chữ', Icons.text_fields), ('Nhạc', Icons.music_note), ('Chuyển cảnh', Icons.auto_awesome)];
     return Scaffold(
       appBar: AppBar(
-        title: Text(history.project.title),
+        leadingWidth: 70,
+        leading: TextButton(
+          onPressed: () => Navigator.of(context).maybePop(),
+          child: const Text('Hủy'),
+        ),
+        title: const VicysWordmark(compact: true),
         actions: [
           IconButton(
             onPressed: history.canUndo ? undo : null,
@@ -119,7 +132,15 @@ class _EditorScreenState extends State<EditorScreen> {
             onPressed: history.canRedo ? redo : null,
             icon: const Icon(Icons.redo),
           ),
-          TextButton(onPressed: export, child: const Text('Xuất')),
+          TextButton(
+            onPressed: history.project.kind == ProjectKind.image
+                ? finish
+                : export,
+            child: Text(
+              history.project.kind == ProjectKind.image ? 'Xong' : 'Xuất',
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
         ],
       ),
       body: Column(children: [
@@ -135,10 +156,10 @@ class _EditorScreenState extends State<EditorScreen> {
           ),
         ))),
         if (history.project.kind == ProjectKind.video)
-          Container(height: 74, margin: const EdgeInsets.all(12), padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: const Color(0xff25252d), borderRadius: BorderRadius.circular(10)),
-            child: const Row(children: [Icon(Icons.play_arrow), SizedBox(width: 8),
-              Expanded(child: LinearProgressIndicator(value: .28)), SizedBox(width: 8), Text('00:08 / 00:30')])),
+          VideoTimeline(
+            project: history.project,
+            onOperation: apply,
+          ),
         if (history.project.kind == ProjectKind.image && imagePanel != null)
           ImageEffectsPanel(
             mode: imagePanel!,
