@@ -61,8 +61,9 @@ push notification thật phải kiểm tra bằng Firebase project phát triển
 
 - Có: shell ứng dụng, project ảnh/video, SQLite local có migration và sync queue,
   camera chụp ảnh/quay video, nhập nhiều ảnh/video từ thư viện, lưu media bền vững,
-  autosave, undo/redo, manifest có version, UI editor/timeline, Firestore/Storage
-  Rules và FCM Functions.
+  hiệu ứng ảnh GPU không phá hủy (preset, sáng, tương phản, bão hòa, nhiệt độ,
+  blur, vignette), autosave, undo/redo, manifest có version, UI editor/timeline,
+  Firestore/Storage Rules và FCM Functions.
 - Cần tích hợp tiếp: shader/filter, codecs/FFmpeg, preview video hoàn chỉnh,
   render thật, OAuth, storage upload có resume, Firebase repositories, share-link
   server function, moderation dashboard và telemetry.

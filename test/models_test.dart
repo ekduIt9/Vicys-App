@@ -50,10 +50,13 @@ void main() {
 
     history.apply(const EditOperation(type: 'crop'));
     expect(history.project.operations, hasLength(1));
+    final appliedRevision = history.project.revision;
     history.undo();
     expect(history.project.operations, isEmpty);
+    expect(history.project.revision, appliedRevision + 1);
     history.redo();
     expect(history.project.operations, hasLength(1));
+    expect(history.project.revision, appliedRevision + 2);
   });
 
   test('equal revision with divergent data becomes conflict', () {
