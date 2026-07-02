@@ -12,6 +12,7 @@ mastering và export. Audio phải phản hồi nhanh và không khóa UI.
 - `music_app.dart`: UI/state; không encode PCM trực tiếp.
 - PCM, render mix và waveform chạy isolate/native thread.
 - Project âm nhạc lưu local trước; cloud chỉ thêm sau khi MVP ổn định.
+- Backing track phải được stream-copy vào app storage trước khi phát hoặc lưu.
 
 ## Chuẩn audio
 
@@ -21,6 +22,8 @@ mastering và export. Audio phải phản hồi nhanh và không khóa UI.
 - Clamp mixer input 0–1 và limiter trước output.
 - Phản hồi UI dưới 50 ms; audio mục tiêu dưới 20 ms trên thiết bị.
 - Không đóng gói sample hoặc preset thiếu giấy phép.
+- Backing track dùng một player riêng; nhạc cụ dùng voice pool độc lập để người
+  dùng có thể đánh theo trong lúc bài nhạc đang phát.
 
 ## Function
 

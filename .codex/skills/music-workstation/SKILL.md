@@ -19,6 +19,8 @@ description: Build and maintain the PulseForge Flutter mobile music workstation,
 - Keep widgets declarative and inject engine interfaces.
 - Run PCM generation, waveform and export outside the UI isolate.
 - Persist project mutations locally before optional synchronization.
+- Copy imported backing tracks into app-owned storage before playback and keep
+  their player independent from the live-instrument voice pool.
 
 ## Audio safety and performance
 
@@ -28,6 +30,8 @@ description: Build and maintain the PulseForge Flutter mobile music workstation,
 - Make BPM changes reschedule cleanly without overlapping timers.
 - Treat Bluetooth latency separately from speaker/wired latency.
 - Never bundle unlicensed samples, presets or DSP code.
+- Label generated falling lanes as a beat guide unless pitch/onset analysis has
+  actually produced note-accurate transcription.
 
 ## Processing documentation
 

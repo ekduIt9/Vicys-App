@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'audio_engine.dart';
+import 'backing_track_service.dart';
 import 'music_models.dart';
 
 /// Root application for the offline PulseForge workstation.
@@ -36,6 +37,7 @@ class MusicStudioScreen extends StatefulWidget {
 
 class _MusicStudioScreenState extends State<MusicStudioScreen> {
   final engine = MusicAudioEngine();
+  final backing = BackingTrackService();
   final pattern = StepPattern();
   var mixer = const MixerState();
   var page = 0;
@@ -43,6 +45,8 @@ class _MusicStudioScreenState extends State<MusicStudioScreen> {
   var bpm = 128;
   var currentStep = 0;
   var playing = false;
+  var importingTrack = false;
+  BackingTrack? track;
   Timer? timer;
 
   static const pianoNotes = [
@@ -76,7 +80,27 @@ class _MusicStudioScreenState extends State<MusicStudioScreen> {
   void dispose() {
     timer?.cancel();
     engine.dispose();
+    backing.dispose();
     super.dispose();
+  }
+
+  Future<void> importTrack() async {
+    if (importingTrack) return;
+    setState(() => importingTrack = true);
+    try {
+      final imported = await backing.importFromDevice();
+      if (mounted && imported != null) setState(() => track = imported);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Không thể mở bài nhạc. Hãy chọn MP3, WAV hoặc M4A khác.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => importingTrack = false);
+    }
   }
 
   void toggleTransport() {
@@ -144,6 +168,10 @@ class _MusicStudioScreenState extends State<MusicStudioScreen> {
               pianoNotes: pianoNotes,
               guitarNotes: guitarNotes,
               synthNotes: synthNotes,
+              backing: backing,
+              track: track,
+              importingTrack: importingTrack,
+              onImportTrack: importTrack,
             ),
             _SequencerPage(
               pattern: pattern,
@@ -184,6 +212,10 @@ class _InstrumentPage extends StatelessWidget {
     required this.pianoNotes,
     required this.guitarNotes,
     required this.synthNotes,
+    required this.backing,
+    required this.track,
+    required this.importingTrack,
+    required this.onImportTrack,
   });
 
   final InstrumentType instrument;
@@ -193,6 +225,10 @@ class _InstrumentPage extends StatelessWidget {
   final List<InstrumentNote> pianoNotes;
   final List<InstrumentNote> guitarNotes;
   final List<InstrumentNote> synthNotes;
+  final BackingTrackService backing;
+  final BackingTrack? track;
+  final bool importingTrack;
+  final VoidCallback onImportTrack;
 
   @override
   Widget build(BuildContext context) {
@@ -204,6 +240,13 @@ class _InstrumentPage extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        _BackingTrackPanel(
+          service: backing,
+          track: track,
+          importing: importingTrack,
+          onImport: onImportTrack,
+        ),
+        const SizedBox(height: 16),
         SegmentedButton<InstrumentType>(
           segments: const [
             ButtonSegment(value: InstrumentType.piano, label: Text('Piano'), icon: Icon(Icons.piano)),
@@ -245,6 +288,209 @@ class _InstrumentPage extends StatelessWidget {
       ],
     );
   }
+}
+
+class _BackingTrackPanel extends StatelessWidget {
+  const _BackingTrackPanel({
+    required this.service,
+    required this.track,
+    required this.importing,
+    required this.onImport,
+  });
+
+  final BackingTrackService service;
+  final BackingTrack? track;
+  final bool importing;
+  final VoidCallback onImport;
+
+  @override
+  Widget build(BuildContext context) => Card(
+        color: const Color(0xff191724),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.library_music, color: Color(0xff33d6e8)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'BACKING TRACK',
+                          style: TextStyle(fontSize: 10, letterSpacing: 1.5),
+                        ),
+                        Text(
+                          track?.name ?? 'Thêm bài nhạc để đánh theo',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: importing ? null : onImport,
+                    icon: importing
+                        ? const SizedBox.square(
+                            dimension: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.add),
+                    label: Text(track == null ? 'Thêm nhạc' : 'Đổi bài'),
+                  ),
+                ],
+              ),
+              if (track != null)
+                _TrackTransport(service: service),
+            ],
+          ),
+        ),
+      );
+}
+
+class _TrackTransport extends StatelessWidget {
+  const _TrackTransport({required this.service});
+  final BackingTrackService service;
+
+  @override
+  Widget build(BuildContext context) => StreamBuilder<Duration>(
+        stream: service.duration,
+        initialData: service.durationValue,
+        builder: (context, durationSnapshot) => StreamBuilder<Duration>(
+          stream: service.position,
+          initialData: service.positionValue,
+          builder: (context, positionSnapshot) {
+            final duration = durationSnapshot.data ?? Duration.zero;
+            final position = positionSnapshot.data ?? Duration.zero;
+            final maximum =
+                duration.inMilliseconds.clamp(1, 1 << 31).toDouble();
+            final current =
+                position.inMilliseconds.clamp(0, maximum.toInt()).toDouble();
+            return Column(
+              children: [
+                Row(
+                  children: [
+                    StreamBuilder<bool>(
+                      stream: service.isPlaying,
+                      initialData: false,
+                      builder: (context, snapshot) => IconButton.filled(
+                        onPressed: service.toggle,
+                        icon: Icon(
+                          snapshot.data == true
+                              ? Icons.pause
+                              : Icons.play_arrow,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Slider(
+                        value: current,
+                        max: maximum,
+                        onChanged: (value) => service.seek(
+                          Duration(milliseconds: value.round()),
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '${_clock(position)} / ${_clock(duration)}',
+                      style: const TextStyle(fontSize: 10),
+                    ),
+                  ],
+                ),
+                StreamBuilder<bool>(
+                  stream: service.isPlaying,
+                  initialData: false,
+                  builder: (context, snapshot) => _BeatGuide(
+                    active: snapshot.data == true,
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+
+  static String _clock(Duration value) {
+    final minutes = value.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds = value.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
+  }
+}
+
+class _BeatGuide extends StatefulWidget {
+  const _BeatGuide({required this.active});
+  final bool active;
+
+  @override
+  State<_BeatGuide> createState() => _BeatGuideState();
+}
+
+class _BeatGuideState extends State<_BeatGuide>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1600),
+  );
+
+  @override
+  void didUpdateWidget(covariant _BeatGuide oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    widget.active ? controller.repeat() : controller.stop();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.active) controller.repeat();
+  }
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        height: 58,
+        child: AnimatedBuilder(
+          animation: controller,
+          builder: (context, _) => CustomPaint(
+            painter: _BeatGuidePainter(controller.value),
+          ),
+        ),
+      );
+}
+
+class _BeatGuidePainter extends CustomPainter {
+  const _BeatGuidePainter(this.progress);
+  final double progress;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final laneWidth = size.width / 8;
+    for (var lane = 0; lane < 8; lane++) {
+      final paint = Paint()
+        ..color = lane.isEven
+            ? const Color(0xff33d6e8)
+            : const Color(0xffffbd3f);
+      final phase = (progress + lane * .17) % 1;
+      final top = phase * size.height;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(lane * laneWidth + 3, top, laneWidth - 6, 18),
+          const Radius.circular(4),
+        ),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _BeatGuidePainter oldDelegate) =>
+      oldDelegate.progress != progress;
 }
 
 class _PerformancePad extends StatelessWidget {
