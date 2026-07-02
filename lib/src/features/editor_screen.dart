@@ -6,9 +6,11 @@ import 'package:path/path.dart' as path;
 
 import '../core/image_effects.dart';
 import '../core/models.dart';
+import '../core/video_editing.dart';
 import '../data/project_repository.dart';
 import '../services/services.dart';
 import '../ui/vicys_design.dart';
+import 'video_preview.dart';
 import 'video_timeline.dart';
 
 class EditorScreen extends StatefulWidget {
@@ -23,13 +25,22 @@ class EditorScreen extends StatefulWidget {
 class _EditorScreenState extends State<EditorScreen> {
   late final EditHistory history = EditHistory(widget.project);
   late final AutosaveController autosave = AutosaveController(widget.repository);
-  final renderService = DemoRenderService();
   late ImageEffectSettings imageEffects =
       ImageEffectSettings.fromProject(widget.project);
+  final videoPosition = ValueNotifier<Duration>(Duration.zero);
+  final videoDuration = ValueNotifier<Duration>(Duration.zero);
+  final videoPreviewKey = GlobalKey<VideoPreviewState>();
+  int selectedClip = 0;
   String? imagePanel;
 
   void apply(String type) {
     setState(() => history.apply(EditOperation(type: type)));
+    autosave.schedule(history.project);
+  }
+
+  /// Applies one validated non-destructive video operation and autosaves it.
+  void applyVideoOperation(EditOperation operation) {
+    setState(() => history.apply(operation));
     autosave.schedule(history.project);
   }
 
@@ -67,32 +78,181 @@ class _EditorScreenState extends State<EditorScreen> {
       setState(() => imagePanel = tool);
       return;
     }
+    if (history.project.kind == ProjectKind.video) {
+      if (history.project.sourcePaths.isEmpty) {
+        _showMessage('Hãy thêm một video vào dự án trước.');
+        return;
+      }
+      switch (tool) {
+        case 'Cắt':
+          _showTrimEditor();
+          return;
+        case 'Tách':
+          _splitAtPlayhead();
+          return;
+        case 'Tốc độ':
+          _showSpeedEditor();
+          return;
+        case 'Âm lượng':
+          _showVolumeEditor();
+          return;
+        default:
+          _showComingSoon(tool);
+          return;
+      }
+    }
     apply(tool);
   }
 
-  Future<void> export() async {
-    showDialog<void>(
+  VideoClipEdit get selectedVideoClip =>
+      VideoClipEdit.fromProject(history.project, selectedClip);
+
+  /// Opens trim controls and commits one operation when the user confirms.
+  Future<void> _showTrimEditor() async {
+    final duration = videoDuration.value;
+    if (duration <= const Duration(milliseconds: 200)) return;
+    final clip = selectedVideoClip;
+    var startMs = clip.trimStart.inMilliseconds.toDouble();
+    var endMs = (clip.trimEnd ?? duration).inMilliseconds.toDouble();
+    final result = await showModalBottomSheet<RangeValues>(
       context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Đang xuất'),
-        content: StreamBuilder<double>(
-          stream: renderService.export(history.project),
-          builder: (context, snapshot) {
-            final progress = snapshot.data ?? 0;
-            if (progress == 1) {
-              Future<void>.delayed(Duration.zero, () {
-                if (dialogContext.mounted) Navigator.pop(dialogContext);
-                if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Đã hoàn thành bản xuất demo')),
-                );
-              });
-            }
-            return LinearProgressIndicator(value: progress);
-          },
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) => Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Cắt video', style: TextStyle(fontSize: 18)),
+              RangeSlider(
+                values: RangeValues(startMs, endMs),
+                min: 0,
+                max: duration.inMilliseconds.toDouble(),
+                divisions: 100,
+                labels: RangeLabels(
+                  _formatDuration(Duration(milliseconds: startMs.round())),
+                  _formatDuration(Duration(milliseconds: endMs.round())),
+                ),
+                onChanged: (value) => setSheetState(() {
+                  startMs = value.start;
+                  endMs = value.end;
+                }),
+              ),
+              FilledButton(
+                onPressed: () =>
+                    Navigator.pop(context, RangeValues(startMs, endMs)),
+                child: const Text('Áp dụng'),
+              ),
+            ],
+          ),
         ),
       ),
     );
+    if (result == null) return;
+    applyVideoOperation(createTrimOperation(
+      clipIndex: selectedClip,
+      start: Duration(milliseconds: result.start.round()),
+      end: Duration(milliseconds: result.end.round()),
+    ));
+  }
+
+  void _splitAtPlayhead() {
+    final position = videoPosition.value;
+    if (position <= selectedVideoClip.trimStart ||
+        position >= (selectedVideoClip.trimEnd ?? videoDuration.value)) {
+      _showMessage('Di chuyển đầu phát vào giữa clip để tách.');
+      return;
+    }
+    applyVideoOperation(
+      createSplitOperation(clipIndex: selectedClip, position: position),
+    );
+    _showMessage('Đã tạo điểm tách tại ${_formatDuration(position)}.');
+  }
+
+  Future<void> _showSpeedEditor() async {
+    var speed = selectedVideoClip.speed;
+    final result = await _showValueEditor(
+      title: 'Tốc độ',
+      value: speed,
+      minimum: .25,
+      maximum: 4,
+      divisions: 15,
+      label: (value) => '${value.toStringAsFixed(2)}x',
+      onChanged: (value) => speed = value,
+    );
+    if (result != null) {
+      applyVideoOperation(
+        createSpeedOperation(clipIndex: selectedClip, speed: result),
+      );
+    }
+  }
+
+  Future<void> _showVolumeEditor() async {
+    var volume = selectedVideoClip.volume;
+    final result = await _showValueEditor(
+      title: 'Âm lượng clip',
+      value: volume,
+      minimum: 0,
+      maximum: 1,
+      divisions: 20,
+      label: (value) => '${(value * 100).round()}%',
+      onChanged: (value) => volume = value,
+    );
+    if (result != null) {
+      applyVideoOperation(
+        createVolumeOperation(clipIndex: selectedClip, volume: result),
+      );
+    }
+  }
+
+  Future<double?> _showValueEditor({
+    required String title,
+    required double value,
+    required double minimum,
+    required double maximum,
+    required int divisions,
+    required String Function(double) label,
+    required ValueChanged<double> onChanged,
+  }) =>
+      showModalBottomSheet<double>(
+        context: context,
+        builder: (context) => StatefulBuilder(
+          builder: (context, setSheetState) => Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(title, style: const TextStyle(fontSize: 18)),
+                Slider(
+                  value: value,
+                  min: minimum,
+                  max: maximum,
+                  divisions: divisions,
+                  label: label(value),
+                  onChanged: (next) => setSheetState(() {
+                    value = next;
+                    onChanged(next);
+                  }),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(context, value),
+                  child: const Text('Áp dụng'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+
+  void _showComingSoon(String tool) =>
+      _showMessage('$tool sẽ được bổ sung ở bước render nâng cao.');
+
+  void _showMessage(String message) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+
+  String _formatDuration(Duration value) {
+    final minutes = value.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds = value.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
   }
 
   /// Persists current operations before returning to the media library.
@@ -104,6 +264,8 @@ class _EditorScreenState extends State<EditorScreen> {
   @override
   void dispose() {
     autosave.dispose();
+    videoPosition.dispose();
+    videoDuration.dispose();
     widget.repository.save(history.project);
     super.dispose();
   }
@@ -114,7 +276,8 @@ class _EditorScreenState extends State<EditorScreen> {
         ? const [('Cắt', Icons.crop), ('Màu', Icons.tune), ('Filter', Icons.filter_vintage),
             ('Chữ', Icons.text_fields), ('Sticker', Icons.emoji_emotions_outlined), ('Vẽ', Icons.brush)]
         : const [('Cắt', Icons.content_cut), ('Tách', Icons.call_split), ('Tốc độ', Icons.speed),
-            ('Màu', Icons.tune), ('Chữ', Icons.text_fields), ('Nhạc', Icons.music_note), ('Chuyển cảnh', Icons.auto_awesome)];
+            ('Âm lượng', Icons.volume_up_outlined), ('Màu', Icons.tune), ('Chữ', Icons.text_fields),
+            ('Nhạc', Icons.music_note), ('Chuyển cảnh', Icons.auto_awesome)];
     return Scaffold(
       appBar: AppBar(
         leadingWidth: 70,
@@ -133,11 +296,9 @@ class _EditorScreenState extends State<EditorScreen> {
             icon: const Icon(Icons.redo),
           ),
           TextButton(
-            onPressed: history.project.kind == ProjectKind.image
-                ? finish
-                : export,
+            onPressed: finish,
             child: Text(
-              history.project.kind == ProjectKind.image ? 'Xong' : 'Xuất',
+              history.project.kind == ProjectKind.image ? 'Xong' : 'Lưu',
               style: const TextStyle(fontWeight: FontWeight.w700),
             ),
           ),
@@ -149,16 +310,32 @@ class _EditorScreenState extends State<EditorScreen> {
           child: Container(
             decoration: BoxDecoration(color: const Color(0xff202027), borderRadius: BorderRadius.circular(12)),
             clipBehavior: Clip.antiAlias,
-            child: _ProjectPreview(
-              project: history.project,
-              imageEffects: imageEffects,
-            ),
+            child: history.project.kind == ProjectKind.video &&
+                    history.project.sourcePaths.isNotEmpty
+                ? VideoPreview(
+                    key: videoPreviewKey,
+                    clip: selectedVideoClip,
+                    position: videoPosition,
+                    duration: videoDuration,
+                  )
+                : _ProjectPreview(
+                    project: history.project,
+                    imageEffects: imageEffects,
+                  ),
           ),
         ))),
         if (history.project.kind == ProjectKind.video)
           VideoTimeline(
             project: history.project,
-            onOperation: apply,
+            position: videoPosition,
+            duration: videoDuration,
+            selectedClip: selectedClip,
+            onSelectedClip: (index) => setState(() => selectedClip = index),
+            onSeek: (position) => videoPreviewKey.currentState?.seek(position),
+            onTogglePlayback: () =>
+                videoPreviewKey.currentState?.togglePlayback(),
+            onUndo: undo,
+            onRedo: redo,
           ),
         if (history.project.kind == ProjectKind.image && imagePanel != null)
           ImageEffectsPanel(

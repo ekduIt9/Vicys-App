@@ -49,6 +49,19 @@ When the user reports a build, runtime or test error:
 - Target frames below 16.7 ms and immediate interaction feedback below 100 ms.
 - Measure before and after optimization; record scenario, device and observed metric.
 
+## Video editor conventions
+
+- Use `video_player` only for native-backed preview, play/pause and seeking; it
+  is not a final render engine.
+- Store trim, split, speed and volume as validated `EditOperation` values and
+  rebuild effective `VideoClipEdit` state from history. Never alter source files.
+- Keep the decoder inside `VideoPreview`, dispose it with the widget lifecycle
+  and expose only small playback commands to the editor screen.
+- Timeline position updates use `ValueListenable` so decoder ticks do not
+  rebuild the full editor.
+- Never label simulated progress as export. Keep drafts locally until a native
+  Android/iOS render adapter creates and verifies the output file.
+
 ## Preserve UX
 
 - Provide loading, empty, error, retry and offline states for every I/O flow.

@@ -1,0 +1,178 @@
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:video_player/video_player.dart';
+
+import '../core/video_editing.dart';
+
+/// Native-backed preview for one selected non-destructive video clip.
+class VideoPreview extends StatefulWidget {
+  const VideoPreview({
+    required this.clip,
+    required this.position,
+    required this.duration,
+    super.key,
+  });
+
+  final VideoClipEdit clip;
+  final ValueNotifier<Duration> position;
+  final ValueNotifier<Duration> duration;
+
+  @override
+  State<VideoPreview> createState() => VideoPreviewState();
+}
+
+/// Owns and releases the native decoder used by [VideoPreview].
+class VideoPreviewState extends State<VideoPreview> {
+  VideoPlayerController? _controller;
+  Object? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _open();
+  }
+
+  @override
+  void didUpdateWidget(covariant VideoPreview oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.clip.sourcePath != widget.clip.sourcePath) {
+      _open();
+    } else {
+      _applyClipSettings();
+    }
+  }
+
+  /// Seeks the native decoder while clamping to the selected trim range.
+  Future<void> seek(Duration requested) async {
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) return;
+    final end = widget.clip.trimEnd ?? controller.value.duration;
+    final target = requested < widget.clip.trimStart
+        ? widget.clip.trimStart
+        : requested > end
+            ? end
+            : requested;
+    await controller.seekTo(target);
+  }
+
+  /// Toggles playback without rebuilding the editor or timeline.
+  Future<void> togglePlayback() async {
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) return;
+    controller.value.isPlaying ? await controller.pause() : await controller.play();
+    if (mounted) setState(() {});
+  }
+
+  /// Creates and initializes the native video decoder for the selected clip.
+  ///
+  /// The previous controller is disposed first. Initialization failures are
+  /// retained as a recoverable UI state and never modify the source file.
+  Future<void> _open() async {
+    final previous = _controller;
+    _controller = null;
+    await previous?.dispose();
+    final controller = VideoPlayerController.file(File(widget.clip.sourcePath));
+    try {
+      await controller.initialize();
+      if (!mounted) {
+        await controller.dispose();
+        return;
+      }
+      _controller = controller;
+      controller.addListener(_onTick);
+      await _applyClipSettings();
+      widget.duration.value = widget.clip.trimEnd ?? controller.value.duration;
+      setState(() => _error = null);
+    } catch (error) {
+      await controller.dispose();
+      if (mounted) setState(() => _error = error);
+    }
+  }
+
+  /// Applies non-destructive speed, volume and trim-start preview settings.
+  Future<void> _applyClipSettings() async {
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) return;
+    await controller.setPlaybackSpeed(widget.clip.speed);
+    await controller.setVolume(widget.clip.volume);
+    final end = widget.clip.trimEnd ?? controller.value.duration;
+    widget.duration.value = end;
+    if (controller.value.position < widget.clip.trimStart ||
+        controller.value.position > end) {
+      await controller.seekTo(widget.clip.trimStart);
+    }
+  }
+
+  void _onTick() {
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) return;
+    final end = widget.clip.trimEnd ?? controller.value.duration;
+    if (controller.value.position >= end && controller.value.isPlaying) {
+      controller.pause();
+      controller.seekTo(widget.clip.trimStart);
+    }
+    widget.position.value = controller.value.position;
+  }
+
+  @override
+  void dispose() {
+    _controller?.removeListener(_onTick);
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = _controller;
+    if (_error != null) {
+      return _VideoError(onRetry: _open);
+    }
+    if (controller == null || !controller.value.isInitialized) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Center(
+          child: AspectRatio(
+            aspectRatio: controller.value.aspectRatio,
+            child: VideoPlayer(controller),
+          ),
+        ),
+        Center(
+          child: IconButton.filledTonal(
+            tooltip: controller.value.isPlaying ? 'Tạm dừng' : 'Phát video',
+            iconSize: 38,
+            onPressed: togglePlayback,
+            icon: Icon(
+              controller.value.isPlaying ? Icons.pause : Icons.play_arrow,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _VideoError extends StatelessWidget {
+  const _VideoError({required this.onRetry});
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) => Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.error_outline, size: 48),
+            const SizedBox(height: 8),
+            const Text('Không thể mở video. File gốc vẫn an toàn.'),
+            TextButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Thử lại'),
+            ),
+          ],
+        ),
+      );
+}
