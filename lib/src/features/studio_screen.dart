@@ -57,7 +57,7 @@ class StudioScreen extends StatelessWidget {
           _CreateCard(
             title: 'Video Studio',
             description: 'Timeline nhiều lớp cho clip, text và audio.',
-            icon: Icons.movie_edit_outlined,
+            icon: Icons.movie_outlined,
             color: VicysColors.primary,
             onTap: openLibrary,
           ),
