@@ -20,6 +20,8 @@ mastering và export. Audio phải phản hồi nhanh và không khóa UI.
 - Dùng voice-pool cố định, tái sử dụng player và đánh dấu voice trước mọi
   `await`; không tạo một native player mới cho mỗi lần chạm.
 - Cache sample preview có giới hạn để tránh render lại WAV cho từng lần bấm.
+- WAV tạo trong bộ nhớ dùng chế độ phát mặc định tương thích của plugin cho đến
+  khi low-latency `BytesSource` được xác minh trên cả Android và iOS.
 - Không tạo buffer dài trên UI isolate.
 - Clamp mixer input 0–1 và limiter trước output.
 - Phản hồi UI dưới 50 ms; audio mục tiêu dưới 20 ms trên thiết bị.
@@ -35,6 +37,8 @@ mastering và export. Audio phải phản hồi nhanh và không khóa UI.
 - Dubstep: 16 performance pad và step-grid bật/tắt được từng ô.
 - Không dùng lại một generic grid cho cả ba nhạc cụ. Toàn bộ workstation khóa
   landscape để ưu tiên nhiều phím, dây và pad có thể chơi trực tiếp.
+- Điều hướng chính dùng menu dropdown góc trái AppBar; không dùng bottom
+  navigation làm giảm chiều cao vùng chơi nhạc cụ.
 
 ## Function
 

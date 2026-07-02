@@ -84,13 +84,17 @@ class MusicAudioEngine {
     slot.order = ++_playOrder;
     final generation = ++slot.generation;
 
+    if (slot.started) {
+      try {
+        await slot.player.stop();
+      } catch (_) {
+        // A completed native voice can already be stopped; it remains reusable.
+      }
+    }
+    if (_disposed || generation != slot.generation) return;
     try {
-      await slot.player.stop();
-      if (_disposed || generation != slot.generation) return;
-      await slot.player.play(
-        BytesSource(bytes),
-        mode: PlayerMode.lowLatency,
-      );
+      await slot.player.play(BytesSource(bytes));
+      slot.started = true;
     } catch (_) {
       if (generation == slot.generation) slot.busy = false;
       return;
@@ -130,6 +134,7 @@ class _VoiceSlot {
 
   final AudioPlayer player;
   var busy = false;
+  var started = false;
   var order = 0;
   var generation = 0;
 }

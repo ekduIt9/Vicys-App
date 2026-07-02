@@ -29,6 +29,8 @@ description: Build and maintain the PulseForge Flutter mobile music workstation,
   concurrent taps cannot bypass the voice limit.
 - Cache generated preview samples with a strict size cap and release every
   player, stream, timer and audio session.
+- Play generated in-memory WAV `BytesSource` with the plugin's compatible
+  default mode unless low-latency byte playback is verified on both platforms.
 - Clamp gains; apply limiter before output; prevent NaN and denormal values.
 - Avoid allocations in recurring sequencer ticks and audio callbacks.
 - Make BPM changes reschedule cleanly without overlapping timers.
@@ -46,6 +48,8 @@ description: Build and maintain the PulseForge Flutter mobile music workstation,
   performance pads and a tappable step-pattern grid.
 - The workstation is landscape-only. Keep the instrument surface wide and
   prioritize playable keys, strings and pads over decorative vertical content.
+- Keep primary navigation in the top-left app-bar dropdown; do not reserve a
+  bottom navigation bar that reduces the landscape instrument surface.
 - Preserve the shared backing-track transport when changing an instrument
   workspace so users can import a device track and play along.
 

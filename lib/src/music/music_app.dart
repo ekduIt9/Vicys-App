@@ -148,6 +148,39 @@ class _MusicStudioScreenState extends State<MusicStudioScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(
+          leadingWidth: 52,
+          leading: PopupMenuButton<int>(
+            tooltip: 'Mở menu',
+            initialValue: page,
+            onSelected: (value) => setState(() => page = value),
+            icon: const Icon(Icons.menu_rounded),
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: 0,
+                child: ListTile(
+                  leading: Icon(Icons.piano),
+                  title: Text('Nhạc cụ'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              PopupMenuItem(
+                value: 1,
+                child: ListTile(
+                  leading: Icon(Icons.grid_on),
+                  title: Text('Sequencer'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              PopupMenuItem(
+                value: 2,
+                child: ListTile(
+                  leading: Icon(Icons.tune),
+                  title: Text('Mix & Master'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            ],
+          ),
           title: const Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -196,15 +229,6 @@ class _MusicStudioScreenState extends State<MusicStudioScreen> {
               mixer: mixer,
               onChanged: (value) => setState(() => mixer = value),
             ),
-          ],
-        ),
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: page,
-          onDestinationSelected: (value) => setState(() => page = value),
-          destinations: const [
-            NavigationDestination(icon: Icon(Icons.piano), label: 'Nhạc cụ'),
-            NavigationDestination(icon: Icon(Icons.grid_on), label: 'Sequencer'),
-            NavigationDestination(icon: Icon(Icons.tune), label: 'Mix & Master'),
           ],
         ),
       );
