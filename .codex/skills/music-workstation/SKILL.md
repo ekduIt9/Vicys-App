@@ -1,0 +1,49 @@
+---
+name: music-workstation
+description: Build and maintain the PulseForge Flutter mobile music workstation, including piano and guitar instruments, synthesis, dubstep, recording, MIDI, sequencer, mixer, mastering, project persistence, and audio export. Use for implementation, optimization, bug fixes, UI/UX changes, tests, or audio architecture work in this repository.
+---
+
+# Music Workstation
+
+## Start
+
+1. Read `docs/MUSIC_SOP.md`.
+2. Trace event → scheduler → synthesis/sample → mixer → output.
+3. Identify UI-isolate, audio-thread and render-isolate work.
+4. Preserve project compatibility and unrelated changes.
+
+## Architecture
+
+- Keep models independent from Flutter and audio plugins.
+- Keep synthesis, scheduling and voice ownership in services.
+- Keep widgets declarative and inject engine interfaces.
+- Run PCM generation, waveform and export outside the UI isolate.
+- Persist project mutations locally before optional synchronization.
+
+## Audio safety and performance
+
+- Bound polyphony and release every player, stream, timer and audio session.
+- Clamp gains; apply limiter before output; prevent NaN and denormal values.
+- Avoid allocations in recurring sequencer ticks and audio callbacks.
+- Make BPM changes reschedule cleanly without overlapping timers.
+- Treat Bluetooth latency separately from speaker/wired latency.
+- Never bundle unlicensed samples, presets or DSP code.
+
+## Processing documentation
+
+Add `///` to public APIs and functions handling synthesis, samples, recording,
+MIDI, scheduling, files, persistence, mixing, mastering or export. Document
+constraints, side effects, thread/isolate, cancellation, failures and ownership.
+
+## Reported errors
+
+1. Inspect the exact call site, audio state and plugin version.
+2. Explain root cause, impact, proposed change and validation.
+3. Ask only `Yes/No` when confirmation is required.
+4. After `Yes`, implement, test and record the durable rule here.
+
+## Validate
+
+Run formatting, `flutter analyze`, `flutter test`, then test physical-device
+latency, multitouch, route changes, interruptions, backgrounding and thermal
+load. Report unavailable checks explicitly.

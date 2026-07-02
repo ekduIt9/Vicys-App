@@ -1,9 +1,12 @@
 ---
-name: studio-social
-description: Develop and review the Studio Social Flutter mobile app for camera effects, image/video editing, local-first projects, Firebase sync and notifications, project sharing, and social features. Use for any implementation, refactor, performance optimization, UI/UX work, database migration, media pipeline change, testing, or code review in this repository; enforce maintainability, responsive UI, data safety, and documentation of processing functions.
+name: studio-social-archived
+description: Archived rules for the former Vicys media editor. Do not use for current PulseForge work; use music-workstation instead.
 ---
 
 # Studio Social
+
+Archived on the PulseForge pivot. The maintained application lives under
+`lib/src/music/`; use `.codex/skills/music-workstation/SKILL.md`.
 
 ## Start every task
 

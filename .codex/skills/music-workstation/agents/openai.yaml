@@ -1,0 +1,4 @@
+interface:
+  display_name: "Music Workstation"
+  short_description: "Build and maintain the offline music studio"
+  default_prompt: "Use $music-workstation to build a responsive music production feature."
