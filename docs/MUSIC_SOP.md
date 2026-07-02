@@ -25,6 +25,15 @@ mastering và export. Audio phải phản hồi nhanh và không khóa UI.
 - Backing track dùng một player riêng; nhạc cụ dùng voice pool độc lập để người
   dùng có thể đánh theo trong lúc bài nhạc đang phát.
 
+## UI nhạc cụ
+
+- Piano: beat guide rơi theo 8 lane và bàn phím chạm; không gọi là nhận diện
+  nốt khi chưa có pitch/onset analysis.
+- Guitar: giao diện thân gỗ, nút hợp âm và 6 dây có thể chạm riêng.
+- Dubstep: 16 performance pad và step-grid bật/tắt được từng ô.
+- Không dùng lại một generic grid cho cả ba nhạc cụ. Trên màn hình hẹp,
+  workspace dạng ngang phải tự chuyển thành bố cục xếp dọc.
+
 ## Function
 
 Mọi API và hàm xử lý PCM, file, recording, MIDI, project hoặc export phải có

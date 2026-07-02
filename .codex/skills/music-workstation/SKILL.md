@@ -33,6 +33,18 @@ description: Build and maintain the PulseForge Flutter mobile music workstation,
 - Label generated falling lanes as a beat guide unless pitch/onset analysis has
   actually produced note-accurate transcription.
 
+## Instrument UI
+
+- Give every instrument its own playable interaction model; never collapse
+  piano, guitar and dubstep into one generic pad grid.
+- Piano uses a falling-lane beat guide above a touch keyboard. Guitar exposes
+  chord triggers and six individually playable strings. Dubstep exposes 16
+  performance pads and a tappable step-pattern grid.
+- Keep controls usable in portrait and landscape. Switch wide workspaces from
+  rows to stacked sections before they overflow on narrow phones.
+- Preserve the shared backing-track transport when changing an instrument
+  workspace so users can import a device track and play along.
+
 ## Processing documentation
 
 Add `///` to public APIs and functions handling synthesis, samples, recording,
