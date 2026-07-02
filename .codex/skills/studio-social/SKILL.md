@@ -58,7 +58,9 @@ When the user reports a build, runtime or test error:
 - Keep the decoder inside `VideoPreview`, dispose it with the widget lifecycle
   and expose only small playback commands to the editor screen.
 - Timeline position updates use `ValueListenable` so decoder ticks do not
-  rebuild the full editor.
+  rebuild the full editor. Import `package:flutter/foundation.dart` explicitly
+  in files that declare `ValueListenable` fields; do not rely on Material
+  library transitive exports.
 - Never label simulated progress as export. Keep drafts locally until a native
   Android/iOS render adapter creates and verifies the output file.
 
