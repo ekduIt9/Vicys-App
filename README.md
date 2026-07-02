@@ -68,7 +68,8 @@ push notification thật phải kiểm tra bằng Firebase project phát triển
   blur, vignette), autosave, undo/redo, manifest có version, UI editor/timeline,
   Firestore/Storage Rules và FCM Functions.
 - Shell Camera–Library–Studio, tìm kiếm project, thumbnail media thật, camera
-  filter carousel và timeline video nhiều track.
+  filter studio với 14 preset, 4 nhóm hiệu ứng, intensity, EV và timeline video
+  nhiều track.
 - Cần tích hợp tiếp: shader/filter, codecs/FFmpeg, preview video hoàn chỉnh,
   render thật, OAuth, storage upload có resume, Firebase repositories, share-link
   server function, moderation dashboard và telemetry.

@@ -2,11 +2,27 @@ import 'dart:math' as math;
 
 import 'models.dart';
 
-enum ImagePreset { original, vivid, mono, vintage, cool }
+enum ImagePreset {
+  original,
+  vivid,
+  mono,
+  vintage,
+  cool,
+  neon,
+  dreamy,
+  film,
+  tealOrange,
+  rose,
+  sunset,
+  fade,
+  cyber,
+  mint,
+}
 
 class ImageEffectSettings {
   const ImageEffectSettings({
     this.preset = ImagePreset.original,
+    this.intensity = 1,
     this.brightness = 0,
     this.contrast = 0,
     this.saturation = 0,
@@ -18,6 +34,7 @@ class ImageEffectSettings {
   static const operationType = 'image_effects';
 
   final ImagePreset preset;
+  final double intensity;
   final double brightness;
   final double contrast;
   final double saturation;
@@ -27,6 +44,7 @@ class ImageEffectSettings {
 
   ImageEffectSettings copyWith({
     ImagePreset? preset,
+    double? intensity,
     double? brightness,
     double? contrast,
     double? saturation,
@@ -36,6 +54,7 @@ class ImageEffectSettings {
   }) =>
       ImageEffectSettings(
         preset: preset ?? this.preset,
+        intensity: (intensity ?? this.intensity).clamp(0, 1).toDouble(),
         brightness: _unit(brightness ?? this.brightness),
         contrast: _unit(contrast ?? this.contrast),
         saturation: _unit(saturation ?? this.saturation),
@@ -64,6 +83,10 @@ class ImageEffectSettings {
           .where((value) => value.name == presetName)
           .firstOrNull ??
           ImagePreset.original,
+      intensity: _number(
+        parameters['intensity'],
+        fallback: 1,
+      ).clamp(0, 1).toDouble(),
       brightness:
           _number(parameters['brightness']).clamp(-1, 1).toDouble(),
       contrast: _number(parameters['contrast']).clamp(-1, 1).toDouble(),
@@ -79,6 +102,7 @@ class ImageEffectSettings {
         type: operationType,
         parameters: {
           'preset': preset.name,
+          'intensity': intensity,
           'brightness': brightness,
           'contrast': contrast,
           'saturation': saturation,
@@ -94,7 +118,7 @@ class ImageEffectSettings {
   /// change, not once per frame. Values are clamped by constructors to prevent
   /// invalid color amplification. The source image is never decoded here.
   List<double> get colorMatrix {
-    var matrix = _presetMatrix(preset);
+    var matrix = _blendPreset(_presetMatrix(preset), intensity);
     matrix = _multiply(_brightnessMatrix(brightness), matrix);
     matrix = _multiply(_contrastMatrix(contrast), matrix);
     matrix = _multiply(_saturationMatrix(saturation), matrix);
@@ -102,8 +126,8 @@ class ImageEffectSettings {
     return matrix;
   }
 
-  static double _number(Object? value) =>
-      value is num ? value.toDouble() : 0;
+  static double _number(Object? value, {double fallback = 0}) =>
+      value is num ? value.toDouble() : fallback;
 
   static double _unit(double value) => value.clamp(-1, 1).toDouble();
 
@@ -123,7 +147,70 @@ class ImageEffectSettings {
             .02, .04, 1.08, 0, 7,
             0, 0, 0, 1, 0,
           ],
+        ImagePreset.neon => const [
+            1.12, .02, .08, 0, -5,
+            .02, 1.08, .14, 0, 2,
+            .08, .06, 1.2, 0, 8,
+            0, 0, 0, 1, 0,
+          ],
+        ImagePreset.dreamy => const [
+            1.04, .04, .04, 0, 12,
+            .02, 1.01, .04, 0, 7,
+            .05, .02, 1.08, 0, 14,
+            0, 0, 0, 1, 0,
+          ],
+        ImagePreset.film => const [
+            .95, .08, .02, 0, 5,
+            .04, .93, .04, 0, 3,
+            .02, .08, .86, 0, -3,
+            0, 0, 0, 1, 0,
+          ],
+        ImagePreset.tealOrange => const [
+            1.08, .04, -.03, 0, 8,
+            -.02, 1.02, .04, 0, 1,
+            -.04, .12, 1.08, 0, 4,
+            0, 0, 0, 1, 0,
+          ],
+        ImagePreset.rose => const [
+            1.1, .06, .06, 0, 9,
+            .03, .98, .03, 0, 2,
+            .08, .02, 1.02, 0, 6,
+            0, 0, 0, 1, 0,
+          ],
+        ImagePreset.sunset => const [
+            1.12, .08, 0, 0, 12,
+            .03, 1.01, .02, 0, 5,
+            0, .02, .88, 0, -8,
+            0, 0, 0, 1, 0,
+          ],
+        ImagePreset.fade => const [
+            .88, .06, .06, 0, 16,
+            .05, .88, .05, 0, 16,
+            .05, .06, .86, 0, 16,
+            0, 0, 0, 1, 0,
+          ],
+        ImagePreset.cyber => const [
+            .96, .06, .18, 0, -8,
+            -.02, 1.12, .16, 0, 5,
+            .16, .02, 1.18, 0, 12,
+            0, 0, 0, 1, 0,
+          ],
+        ImagePreset.mint => const [
+            .96, .04, .02, 0, 2,
+            .02, 1.08, .08, 0, 10,
+            .02, .08, 1.02, 0, 4,
+            0, 0, 0, 1, 0,
+          ],
       };
+
+  static List<double> _blendPreset(List<double> preset, double intensity) =>
+      List<double>.generate(
+        20,
+        (index) =>
+            _identity[index] +
+            (preset[index] - _identity[index]) * intensity,
+        growable: false,
+      );
 
   static List<double> _brightnessMatrix(double value) {
     final offset = value * 90;

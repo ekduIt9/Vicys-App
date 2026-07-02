@@ -11,15 +11,19 @@ import 'editor_screen.dart';
 
 enum CaptureMode { photo, video }
 
+enum CameraEffectCategory { trending, beauty, filters, effects }
+
 class CameraPage extends StatefulWidget {
   const CameraPage({
     required this.repository,
     required this.active,
+    this.onClose,
     super.key,
   });
 
   final ProjectRepository repository;
   final bool active;
+  final VoidCallback? onClose;
 
   @override
   State<CameraPage> createState() => _CameraPageState();
@@ -38,6 +42,11 @@ class _CameraPageState extends State<CameraPage>
   Duration _recordingDuration = Duration.zero;
   Timer? _recordingTimer;
   ImagePreset _cameraPreset = ImagePreset.original;
+  CameraEffectCategory _effectCategory = CameraEffectCategory.trending;
+  double _filterIntensity = .8;
+  double _exposure = 0;
+  double _minimumExposure = 0;
+  double _maximumExposure = 0;
 
   @override
   void initState() {
@@ -92,6 +101,8 @@ class _CameraPageState extends State<CameraPage>
       );
       await controller.initialize();
       await controller.setFlashMode(_flashMode);
+      _minimumExposure = await controller.getMinExposureOffset();
+      _maximumExposure = await controller.getMaxExposureOffset();
       if (!mounted || !widget.active) {
         await controller.dispose();
         return;
@@ -208,10 +219,17 @@ class _CameraPageState extends State<CameraPage>
     );
     if (_cameraPreset != ImagePreset.original) {
       final operation = kind == ProjectKind.image
-          ? ImageEffectSettings(preset: _cameraPreset).toOperation()
+          ? ImageEffectSettings(
+              preset: _cameraPreset,
+              intensity: _filterIntensity,
+            ).toOperation()
           : EditOperation(
               type: 'camera_filter',
-              parameters: {'preset': _cameraPreset.name},
+              parameters: {
+                'preset': _cameraPreset.name,
+                'intensity': _filterIntensity,
+                'exposure': _exposure,
+              },
             );
       project = project.copyWith(
         operations: [operation],
@@ -258,6 +276,23 @@ class _CameraPageState extends State<CameraPage>
     if (mounted) setState(() => _error = message);
   }
 
+  /// Applies camera exposure within hardware-supported EV bounds.
+  ///
+  /// The camera plugin performs native device I/O. Unsupported values are
+  /// clamped and failures keep the previous preview exposure.
+  Future<void> _setExposure(double value) async {
+    final controller = _controller;
+    if (controller == null) return;
+    final clamped =
+        value.clamp(_minimumExposure, _maximumExposure).toDouble();
+    try {
+      final applied = await controller.setExposureOffset(clamped);
+      if (mounted) setState(() => _exposure = applied);
+    } on CameraException {
+      _setError('Thiết bị không hỗ trợ thay đổi độ phơi sáng.');
+    }
+  }
+
   String _cameraErrorMessage(CameraException error) => switch (error.code) {
         'CameraAccessDenied' ||
         'CameraAccessDeniedWithoutPrompt' =>
@@ -291,25 +326,37 @@ class _CameraPageState extends State<CameraPage>
       Center(
         child: ColorFiltered(
           colorFilter: ColorFilter.matrix(
-            ImageEffectSettings(preset: _cameraPreset).colorMatrix,
+            ImageEffectSettings(
+              preset: _cameraPreset,
+              intensity: _filterIntensity,
+            ).colorMatrix,
           ),
           child: CameraPreview(controller),
         ),
       ),
+      const Center(child: IgnorePointer(child: _FocusReticle())),
       Positioned(
         top: 12,
         left: 16,
         right: 16,
         child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          IconButton.filledTonal(
-            tooltip: 'Flash',
-            onPressed: _cycleFlash,
-            icon: Icon(switch (_flashMode) {
-              FlashMode.auto => Icons.flash_auto,
-              FlashMode.always => Icons.flash_on,
-              _ => Icons.flash_off,
-            }),
-          ),
+          Row(children: [
+            if (widget.onClose != null)
+              IconButton.filledTonal(
+                tooltip: 'Đóng camera',
+                onPressed: widget.onClose,
+                icon: const Icon(Icons.close),
+              ),
+            IconButton.filledTonal(
+              tooltip: 'Flash',
+              onPressed: _cycleFlash,
+              icon: Icon(switch (_flashMode) {
+                FlashMode.auto => Icons.flash_auto,
+                FlashMode.always => Icons.flash_on,
+                _ => Icons.flash_off,
+              }),
+            ),
+          ]),
           if (_recording)
             _RecordingTime(duration: _recordingDuration),
           IconButton.filledTonal(
@@ -324,11 +371,24 @@ class _CameraPageState extends State<CameraPage>
         left: 0,
         right: 0,
         child: Column(children: [
+          _EffectCategoryTabs(
+            selected: _effectCategory,
+            onSelected: (category) =>
+                setState(() => _effectCategory = category),
+          ),
+          const SizedBox(height: 6),
           _CameraFilterStrip(
+            category: _effectCategory,
             selected: _cameraPreset,
             onSelected: (preset) => setState(() => _cameraPreset = preset),
           ),
-          const SizedBox(height: 10),
+          if (_cameraPreset != ImagePreset.original)
+            _FilterIntensity(
+              value: _filterIntensity,
+              onChanged: (value) =>
+                  setState(() => _filterIntensity = value),
+            ),
+          const SizedBox(height: 6),
           SegmentedButton<CaptureMode>(
             segments: const [
               ButtonSegment(value: CaptureMode.photo, label: Text('ẢNH')),
@@ -340,47 +400,88 @@ class _CameraPageState extends State<CameraPage>
                 : (value) => setState(() => _mode = value.first),
           ),
           const SizedBox(height: 16),
-          Semantics(
-            button: true,
-            label: _mode == CaptureMode.photo
-                ? 'Chụp ảnh'
-                : (_recording ? 'Dừng quay video' : 'Bắt đầu quay video'),
-            child: GestureDetector(
-              onTap: _busy
-                  ? null
-                  : (_mode == CaptureMode.photo
-                      ? _takePhoto
-                      : _toggleRecording),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                width: 76,
-                height: 76,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: _recording ? Colors.red : Colors.white,
-                  border: Border.all(color: Colors.white, width: 5),
+          Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+            const _CameraMetric(label: 'ISO', value: 'AUTO'),
+            Semantics(
+              button: true,
+              label: _mode == CaptureMode.photo
+                  ? 'Chụp ảnh'
+                  : (_recording ? 'Dừng quay video' : 'Bắt đầu quay video'),
+              child: GestureDetector(
+                onTap: _busy
+                    ? null
+                    : (_mode == CaptureMode.photo
+                        ? _takePhoto
+                        : _toggleRecording),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  width: 76,
+                  height: 76,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: _recording ? Colors.red : Colors.white,
+                    border: Border.all(color: Colors.white, width: 5),
+                  ),
+                  child: _busy
+                      ? const Padding(
+                          padding: EdgeInsets.all(20),
+                          child: CircularProgressIndicator(strokeWidth: 3),
+                        )
+                      : null,
                 ),
-                child: _busy
-                    ? const Padding(
-                        padding: EdgeInsets.all(20),
-                        child: CircularProgressIndicator(strokeWidth: 3),
-                      )
-                    : null,
               ),
             ),
-          ),
+            GestureDetector(
+              onTap: () => _showExposureSheet(context),
+              child: _CameraMetric(
+                label: 'EV',
+                value: '${_exposure >= 0 ? '+' : ''}${_exposure.toStringAsFixed(1)}',
+              ),
+            ),
+          ]),
         ]),
       ),
     ]);
+  }
+
+  Future<void> _showExposureSheet(BuildContext context) async {
+    if (_minimumExposure == _maximumExposure) return;
+    var preview = _exposure;
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xff1c1b1b),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) => Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 30),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text('Độ phơi sáng ${preview.toStringAsFixed(1)} EV'),
+            Slider(
+              min: _minimumExposure,
+              max: _maximumExposure,
+              value: preview.clamp(
+                _minimumExposure,
+                _maximumExposure,
+              ).toDouble(),
+              onChanged: (value) {
+                setSheetState(() => preview = value);
+                _setExposure(value);
+              },
+            ),
+          ]),
+        ),
+      ),
+    );
   }
 }
 
 class _CameraFilterStrip extends StatelessWidget {
   const _CameraFilterStrip({
+    required this.category,
     required this.selected,
     required this.onSelected,
   });
 
+  final CameraEffectCategory category;
   final ImagePreset selected;
   final ValueChanged<ImagePreset> onSelected;
 
@@ -388,33 +489,69 @@ class _CameraFilterStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     const labels = {
       ImagePreset.original: 'None',
-      ImagePreset.vivid: 'Neon',
+      ImagePreset.vivid: 'Vivid',
       ImagePreset.mono: 'Mono',
       ImagePreset.vintage: 'Golden',
       ImagePreset.cool: 'Mist',
+      ImagePreset.neon: 'Neon',
+      ImagePreset.dreamy: 'Dreamy',
+      ImagePreset.film: 'Film',
+      ImagePreset.tealOrange: 'Teal',
+      ImagePreset.rose: 'Rosy',
+      ImagePreset.sunset: 'Sunset',
+      ImagePreset.fade: 'Fade',
+      ImagePreset.cyber: 'Cyber',
+      ImagePreset.mint: 'Mint',
+    };
+    final presets = switch (category) {
+      CameraEffectCategory.trending => const [
+          ImagePreset.original,
+          ImagePreset.neon,
+          ImagePreset.dreamy,
+          ImagePreset.tealOrange,
+          ImagePreset.rose,
+          ImagePreset.cyber,
+        ],
+      CameraEffectCategory.beauty => const [
+          ImagePreset.original,
+          ImagePreset.dreamy,
+          ImagePreset.rose,
+          ImagePreset.fade,
+          ImagePreset.mint,
+          ImagePreset.sunset,
+        ],
+      CameraEffectCategory.filters => ImagePreset.values,
+      CameraEffectCategory.effects => const [
+          ImagePreset.original,
+          ImagePreset.cyber,
+          ImagePreset.neon,
+          ImagePreset.film,
+          ImagePreset.mono,
+          ImagePreset.vintage,
+        ],
     };
     return SizedBox(
-      height: 72,
+      height: 82,
       child: ListView.separated(
         padding: const EdgeInsets.symmetric(horizontal: 18),
         scrollDirection: Axis.horizontal,
-        itemCount: ImagePreset.values.length,
+        itemCount: presets.length,
         separatorBuilder: (_, __) => const SizedBox(width: 13),
         itemBuilder: (_, index) {
-          final preset = ImagePreset.values[index];
+          final preset = presets[index];
           final active = preset == selected;
           return GestureDetector(
             onTap: () => onSelected(preset),
             child: SizedBox(
-              width: 58,
+              width: 64,
               child: Column(children: [
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 160),
-                  width: 48,
-                  height: 48,
+                  width: 54,
+                  height: 54,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: const Color(0xaa202027),
+                    gradient: _presetGradient(preset),
                     border: Border.all(
                       color: active
                           ? const Color(0xffc0c1ff)
@@ -425,7 +562,7 @@ class _CameraFilterStrip extends StatelessWidget {
                   child: Icon(
                     preset == ImagePreset.original
                         ? Icons.block
-                        : Icons.lens_blur,
+                        : _presetIcon(preset),
                     size: 22,
                   ),
                 ),
@@ -438,6 +575,207 @@ class _CameraFilterStrip extends StatelessWidget {
       ),
     );
   }
+
+  LinearGradient _presetGradient(ImagePreset preset) {
+    final colors = switch (preset) {
+      ImagePreset.neon || ImagePreset.cyber =>
+        const [Color(0xff00e5ff), Color(0xffff4fd8)],
+      ImagePreset.dreamy || ImagePreset.rose =>
+        const [Color(0xffffb0cd), Color(0xffc0c1ff)],
+      ImagePreset.sunset || ImagePreset.vintage =>
+        const [Color(0xffff9a44), Color(0xff6b2d5c)],
+      ImagePreset.cool || ImagePreset.mint =>
+        const [Color(0xff4edea3), Color(0xff5376ff)],
+      ImagePreset.mono => const [Color(0xffeeeeee), Color(0xff333333)],
+      ImagePreset.film || ImagePreset.fade =>
+        const [Color(0xffc9b79c), Color(0xff49413a)],
+      ImagePreset.tealOrange =>
+        const [Color(0xff00a7a7), Color(0xffff8b3d)],
+      _ => const [Color(0xff353534), Color(0xff1c1b1b)],
+    };
+    return LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: colors,
+    );
+  }
+
+  IconData _presetIcon(ImagePreset preset) => switch (preset) {
+        ImagePreset.neon || ImagePreset.cyber => Icons.bolt,
+        ImagePreset.dreamy || ImagePreset.fade => Icons.cloud_outlined,
+        ImagePreset.rose => Icons.favorite_border,
+        ImagePreset.sunset => Icons.wb_sunny_outlined,
+        ImagePreset.mono => Icons.monochrome_photos,
+        ImagePreset.film || ImagePreset.vintage => Icons.movie_filter,
+        ImagePreset.cool || ImagePreset.mint => Icons.ac_unit,
+        ImagePreset.tealOrange => Icons.palette_outlined,
+        _ => Icons.lens_blur,
+      };
+}
+
+class _EffectCategoryTabs extends StatelessWidget {
+  const _EffectCategoryTabs({
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final CameraEffectCategory selected;
+  final ValueChanged<CameraEffectCategory> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    const labels = {
+      CameraEffectCategory.trending: 'Trending',
+      CameraEffectCategory.beauty: 'Beauty',
+      CameraEffectCategory.filters: 'Filters',
+      CameraEffectCategory.effects: 'Effects',
+    };
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: CameraEffectCategory.values.map((category) {
+        final active = category == selected;
+        return InkWell(
+          onTap: () => onSelected(category),
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 8),
+            padding: const EdgeInsets.only(bottom: 5),
+            decoration: active
+                ? const BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(
+                        color: Color(0xffc0c1ff),
+                        width: 3,
+                      ),
+                    ),
+                  )
+                : null,
+            child: Text(
+              labels[category]!,
+              style: TextStyle(
+                fontWeight: active ? FontWeight.w700 : FontWeight.w400,
+                color: active ? Colors.white : Colors.white60,
+              ),
+            ),
+          ),
+        );
+      }).toList(growable: false),
+    );
+  }
+}
+
+class _FilterIntensity extends StatelessWidget {
+  const _FilterIntensity({
+    required this.value,
+    required this.onChanged,
+  });
+
+  final double value;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        height: 36,
+        child: Row(children: [
+          const SizedBox(width: 24),
+          const Text('Intensity', style: TextStyle(fontSize: 11)),
+          Expanded(
+            child: Slider(value: value, onChanged: onChanged),
+          ),
+          SizedBox(
+            width: 42,
+            child: Text(
+              '${(value * 100).round()}',
+              style: const TextStyle(
+                fontFamily: 'monospace',
+                color: Color(0xffc0c1ff),
+              ),
+            ),
+          ),
+        ]),
+      );
+}
+
+class _CameraMetric extends StatelessWidget {
+  const _CameraMetric({required this.label, required this.value});
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontFamily: 'monospace',
+              fontSize: 10,
+              color: Colors.white60,
+              letterSpacing: 1.2,
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              fontFamily: 'monospace',
+              color: Color(0xffc0c1ff),
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.5,
+            ),
+          ),
+        ],
+      );
+}
+
+class _FocusReticle extends StatelessWidget {
+  const _FocusReticle();
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        width: 116,
+        height: 116,
+        child: Stack(children: [
+          ...[
+            Alignment.topLeft,
+            Alignment.topRight,
+            Alignment.bottomLeft,
+            Alignment.bottomRight,
+          ].map(
+            (alignment) => Align(
+              alignment: alignment,
+              child: Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  border: Border(
+                    top: alignment.y < 0
+                        ? const BorderSide(color: Colors.white70, width: 3)
+                        : BorderSide.none,
+                    bottom: alignment.y > 0
+                        ? const BorderSide(color: Colors.white70, width: 3)
+                        : BorderSide.none,
+                    left: alignment.x < 0
+                        ? const BorderSide(color: Colors.white70, width: 3)
+                        : BorderSide.none,
+                    right: alignment.x > 0
+                        ? const BorderSide(color: Colors.white70, width: 3)
+                        : BorderSide.none,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const Center(
+            child: Text(
+              'AF',
+              style: TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 19,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ]),
+      );
 }
 
 class _CameraError extends StatelessWidget {

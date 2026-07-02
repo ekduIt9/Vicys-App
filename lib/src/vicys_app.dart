@@ -36,6 +36,7 @@ class _VicysShellState extends State<VicysShell> {
       CameraPage(
         repository: _repository,
         active: _selectedIndex == 0,
+        onClose: () => setState(() => _selectedIndex = 1),
       ),
       MediaLibraryScreen(
         key: _libraryKey,
@@ -51,7 +52,9 @@ class _VicysShellState extends State<VicysShell> {
         bottom: false,
         child: IndexedStack(index: _selectedIndex, children: pages),
       ),
-      bottomNavigationBar: NavigationBar(
+      bottomNavigationBar: _selectedIndex == 0
+          ? null
+          : NavigationBar(
         selectedIndex: _selectedIndex,
         onDestinationSelected: (index) {
           setState(() => _selectedIndex = index);
@@ -74,7 +77,7 @@ class _VicysShellState extends State<VicysShell> {
             label: 'Studio',
           ),
         ],
-      ),
+            ),
     );
   }
 }

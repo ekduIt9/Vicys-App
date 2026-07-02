@@ -348,6 +348,15 @@ class _PresetStrip extends StatelessWidget {
       ImagePreset.mono: 'Đen trắng',
       ImagePreset.vintage: 'Cổ điển',
       ImagePreset.cool: 'Lạnh',
+      ImagePreset.neon: 'Neon',
+      ImagePreset.dreamy: 'Mơ màng',
+      ImagePreset.film: 'Film',
+      ImagePreset.tealOrange: 'Teal',
+      ImagePreset.rose: 'Rose',
+      ImagePreset.sunset: 'Sunset',
+      ImagePreset.fade: 'Fade',
+      ImagePreset.cyber: 'Cyber',
+      ImagePreset.mint: 'Mint',
     };
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),

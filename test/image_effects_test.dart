@@ -8,6 +8,7 @@ void main() {
     final settings = const ImageEffectSettings().copyWith(
       preset: ImagePreset.vintage,
       brightness: .25,
+      intensity: .7,
       vignette: .6,
     );
     final project = MediaProject(
@@ -25,6 +26,7 @@ void main() {
 
     expect(restored.preset, ImagePreset.vintage);
     expect(restored.brightness, .25);
+    expect(restored.intensity, .7);
     expect(restored.vignette, .6);
   });
 
@@ -32,12 +34,14 @@ void main() {
     final settings = ImageEffectSettings.fromParameters({
       'brightness': 5,
       'contrast': -9,
+      'intensity': 2,
       'blur': 99,
       'vignette': -4,
     });
 
     expect(settings.brightness, 1);
     expect(settings.contrast, -1);
+    expect(settings.intensity, 1);
     expect(settings.blur, 10);
     expect(settings.vignette, 0);
   });
