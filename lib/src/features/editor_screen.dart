@@ -341,11 +341,23 @@ class _EditorScreenState extends State<EditorScreen> {
       ),
     );
     if (mounted && selected != null) {
-      applyVideoOperation(createVideoSettingOperation(
-        VideoEditOperation.sticker,
-        selected.isEmpty ? null : selected,
+      applyVideoOperation(createStickerOperation(
+        sticker: selected.isEmpty ? null : selected,
+        x: videoComposition.stickerX,
+        y: videoComposition.stickerY,
       ));
     }
+  }
+
+  /// Commits the final normalized sticker position after a drag gesture.
+  void moveSticker(Offset position) {
+    final sticker = videoComposition.sticker;
+    if (sticker == null) return;
+    applyVideoOperation(createStickerOperation(
+      sticker: sticker,
+      x: position.dx,
+      y: position.dy,
+    ));
   }
 
   /// Imports a soundtrack into durable storage and commits its local path.
@@ -571,6 +583,7 @@ class _EditorScreenState extends State<EditorScreen> {
                         composition: videoComposition,
                         position: videoPosition,
                         duration: videoDuration,
+                        onStickerMoved: moveSticker,
                       )
                     : _ProjectPreview(
                         project: history.project,

@@ -80,6 +80,10 @@ When the user reports a build, runtime or test error:
   until at least one durable video source has been imported.
 - Source-list changes go through `EditHistory.replaceSourcePaths` so adding
   clips increments revision, autosaves and remains undoable.
+- Never issue audio seek/pause/resume calls until an audio source is loaded;
+  soundtrack failures must not prevent the video controller from playing.
+- Store overlay positions as normalized canvas coordinates. Update drag preview
+  in widget state and commit one history operation only when the gesture ends.
 
 ## Preserve UX
 

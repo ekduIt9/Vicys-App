@@ -13,6 +13,7 @@ class VideoPreview extends StatefulWidget {
     required this.composition,
     required this.position,
     required this.duration,
+    required this.onStickerMoved,
     super.key,
   });
 
@@ -20,6 +21,7 @@ class VideoPreview extends StatefulWidget {
   final VideoComposition composition;
   final ValueNotifier<Duration> position;
   final ValueNotifier<Duration> duration;
+  final ValueChanged<Offset> onStickerMoved;
 
   @override
   State<VideoPreview> createState() => VideoPreviewState();
@@ -62,7 +64,13 @@ class VideoPreviewState extends State<VideoPreview> {
             ? end
             : requested;
     await controller.seekTo(target);
-    await _audioPlayer.seek(target - widget.clip.trimStart);
+    if (_loadedAudioPath != null) {
+      try {
+        await _audioPlayer.seek(target - widget.clip.trimStart);
+      } catch (_) {
+        _loadedAudioPath = null;
+      }
+    }
   }
 
   /// Toggles playback without rebuilding the editor or timeline.
@@ -71,13 +79,25 @@ class VideoPreviewState extends State<VideoPreview> {
     if (controller == null || !controller.value.isInitialized) return;
     if (controller.value.isPlaying) {
       await controller.pause();
-      await _audioPlayer.pause();
+      if (_loadedAudioPath != null) {
+        try {
+          await _audioPlayer.pause();
+        } catch (_) {
+          _loadedAudioPath = null;
+        }
+      }
     } else {
-      await _audioPlayer.seek(
-        controller.value.position - widget.clip.trimStart,
-      );
       await controller.play();
-      if (_loadedAudioPath != null) await _audioPlayer.resume();
+      if (_loadedAudioPath != null) {
+        try {
+          await _audioPlayer.seek(
+            controller.value.position - widget.clip.trimStart,
+          );
+          await _audioPlayer.resume();
+        } catch (_) {
+          _loadedAudioPath = null;
+        }
+      }
     }
     if (mounted) setState(() {});
   }
@@ -113,8 +133,14 @@ class VideoPreviewState extends State<VideoPreview> {
   Future<void> _prepareAudio() async {
     final path = widget.composition.audioPath;
     if (path == null || path.isEmpty) {
+      if (_loadedAudioPath != null) {
+        try {
+          await _audioPlayer.stop();
+        } catch (_) {
+          // Video preview remains usable when the optional soundtrack fails.
+        }
+      }
       _loadedAudioPath = null;
-      await _audioPlayer.stop();
       return;
     }
     try {
@@ -146,9 +172,9 @@ class VideoPreviewState extends State<VideoPreview> {
     final end = widget.clip.trimEnd ?? controller.value.duration;
     if (controller.value.position >= end && controller.value.isPlaying) {
       controller.pause();
-      _audioPlayer.pause();
+      if (_loadedAudioPath != null) _audioPlayer.pause();
       controller.seekTo(widget.clip.trimStart);
-      _audioPlayer.seek(Duration.zero);
+      if (_loadedAudioPath != null) _audioPlayer.seek(Duration.zero);
     }
     widget.position.value = controller.value.position;
   }
@@ -222,10 +248,15 @@ class VideoPreviewState extends State<VideoPreview> {
             ),
           ),
         if (widget.composition.sticker case final sticker?)
-          Positioned(
-            top: 24,
-            right: 24,
-            child: Text(sticker, style: const TextStyle(fontSize: 52)),
+          Positioned.fill(
+            child: _DraggableSticker(
+              sticker: sticker,
+              position: Offset(
+                widget.composition.stickerX,
+                widget.composition.stickerY,
+              ),
+              onCommitted: widget.onStickerMoved,
+            ),
           ),
         Center(
           child: IconButton.filledTonal(
@@ -240,6 +271,76 @@ class VideoPreviewState extends State<VideoPreview> {
       ],
     );
   }
+}
+
+class _DraggableSticker extends StatefulWidget {
+  const _DraggableSticker({
+    required this.sticker,
+    required this.position,
+    required this.onCommitted,
+  });
+
+  final String sticker;
+  final Offset position;
+  final ValueChanged<Offset> onCommitted;
+
+  @override
+  State<_DraggableSticker> createState() => _DraggableStickerState();
+}
+
+class _DraggableStickerState extends State<_DraggableSticker> {
+  late Offset position = widget.position;
+
+  @override
+  void didUpdateWidget(covariant _DraggableSticker oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.position != widget.position) position = widget.position;
+  }
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+        builder: (context, constraints) {
+          const size = 64.0;
+          final width = (constraints.maxWidth - size)
+              .clamp(1.0, double.infinity)
+              .toDouble();
+          final height =
+              (constraints.maxHeight - size)
+                  .clamp(1.0, double.infinity)
+                  .toDouble();
+          return Stack(
+            children: [
+              Positioned(
+                left: position.dx * width,
+                top: position.dy * height,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onPanUpdate: (details) => setState(() {
+                    position = Offset(
+                      (position.dx + details.delta.dx / width)
+                          .clamp(0, 1)
+                          .toDouble(),
+                      (position.dy + details.delta.dy / height)
+                          .clamp(0, 1)
+                          .toDouble(),
+                    );
+                  }),
+                  onPanEnd: (_) => widget.onCommitted(position),
+                  child: SizedBox.square(
+                    dimension: size,
+                    child: Center(
+                      child: Text(
+                        widget.sticker,
+                        style: const TextStyle(fontSize: 52),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      );
 }
 
 class _VideoError extends StatelessWidget {

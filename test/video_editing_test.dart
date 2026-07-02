@@ -107,4 +107,17 @@ void main() {
     expect(composition.text, isNull);
     expect(composition.audioPath, isNull);
   });
+
+  test('sticker position is normalized and latest drag wins', () {
+    final project = projectWith([
+      createStickerOperation(sticker: '✨', x: -.5, y: 2),
+      createStickerOperation(sticker: '✨', x: .25, y: .75),
+    ]);
+
+    final composition = VideoComposition.fromProject(project);
+
+    expect(composition.sticker, '✨');
+    expect(composition.stickerX, .25);
+    expect(composition.stickerY, .75);
+  });
 }

@@ -82,6 +82,8 @@ class VideoComposition {
     this.filter = VideoFilter.original,
     this.text,
     this.sticker,
+    this.stickerX = .72,
+    this.stickerY = .12,
     this.audioPath,
     this.transition = VideoTransition.none,
     this.aspectRatio = 9 / 16,
@@ -90,6 +92,8 @@ class VideoComposition {
   final VideoFilter filter;
   final String? text;
   final String? sticker;
+  final double stickerX;
+  final double stickerY;
   final String? audioPath;
   final VideoTransition transition;
   final double aspectRatio;
@@ -106,7 +110,17 @@ class VideoComposition {
         case VideoEditOperation.text:
           result = result._copy(text: value is String ? value : null);
         case VideoEditOperation.sticker:
-          result = result._copy(sticker: value is String ? value : null);
+          result = result._copy(
+            sticker: value is String ? value : null,
+            stickerX: _normalized(
+              operation.parameters['x'],
+              result.stickerX,
+            ),
+            stickerY: _normalized(
+              operation.parameters['y'],
+              result.stickerY,
+            ),
+          );
         case VideoEditOperation.audio:
           result = result._copy(audioPath: value is String ? value : null);
         case VideoEditOperation.transition:
@@ -122,6 +136,8 @@ class VideoComposition {
     VideoFilter? filter,
     Object? text = _unset,
     Object? sticker = _unset,
+    double? stickerX,
+    double? stickerY,
     Object? audioPath = _unset,
     VideoTransition? transition,
     double? aspectRatio,
@@ -130,6 +146,8 @@ class VideoComposition {
         filter: filter ?? this.filter,
         text: identical(text, _unset) ? this.text : text as String?,
         sticker: identical(sticker, _unset) ? this.sticker : sticker as String?,
+        stickerX: stickerX ?? this.stickerX,
+        stickerY: stickerY ?? this.stickerY,
         audioPath:
             identical(audioPath, _unset) ? this.audioPath : audioPath as String?,
         transition: transition ?? this.transition,
@@ -139,6 +157,11 @@ class VideoComposition {
   static double _ratio(Object? value) {
     final ratio = value is num ? value.toDouble() : 9 / 16;
     return ratio > 0 ? ratio : 9 / 16;
+  }
+
+  static double _normalized(Object? value, double fallback) {
+    if (value is! num) return fallback;
+    return value.toDouble().clamp(0, 1).toDouble();
   }
 }
 
@@ -208,6 +231,24 @@ enum VideoTransition {
 /// Creates a project-wide operation with a serializable scalar value.
 EditOperation createVideoSettingOperation(String type, Object? value) =>
     EditOperation(type: type, parameters: {'value': value});
+
+/// Creates a sticker operation with canvas-relative coordinates.
+///
+/// Coordinates are clamped to zero through one so projects remain portable
+/// across canvas sizes and aspect ratios.
+EditOperation createStickerOperation({
+  required String? sticker,
+  required double x,
+  required double y,
+}) =>
+    EditOperation(
+      type: VideoEditOperation.sticker,
+      parameters: {
+        'value': sticker,
+        'x': x.clamp(0, 1),
+        'y': y.clamp(0, 1),
+      },
+    );
 
 /// Creates a validated trim operation without modifying the source file.
 EditOperation createTrimOperation({
