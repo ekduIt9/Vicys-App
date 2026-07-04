@@ -46,6 +46,9 @@ description: Build and maintain the PulseForge Flutter mobile music workstation,
 - Piano uses a falling-lane beat guide above a touch keyboard. Guitar exposes
   chord triggers and six individually playable strings. Dubstep exposes 16
   performance pads and a tappable step-pattern grid.
+- Built-in piano practice demos use deterministic note timelines with a
+  four-beat lead-in. Falling tiles must align with playable key lanes, expose
+  play/pause/replay, and score a hit only inside a bounded timing window.
 - The workstation is landscape-only. Keep the instrument surface wide and
   prioritize playable keys, strings and pads over decorative vertical content.
 - Keep primary navigation in the top-left app-bar dropdown; do not reserve a

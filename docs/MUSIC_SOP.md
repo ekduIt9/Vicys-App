@@ -31,8 +31,10 @@ mastering và export. Audio phải phản hồi nhanh và không khóa UI.
 
 ## UI nhạc cụ
 
-- Piano: beat guide rơi theo 8 lane và bàn phím chạm; không gọi là nhận diện
+- Piano: beat guide rơi theo đúng số lane bàn phím chạm; không gọi là nhận diện
   nốt khi chưa có pitch/onset analysis.
+- Demo luyện piano dùng timeline nốt xác định, có 4 beat đếm vào, chọn bài,
+  play/pause/replay và chỉ tính đúng khi bấm đúng lane trong cửa sổ thời gian.
 - Guitar: giao diện thân gỗ, nút hợp âm và 6 dây có thể chạm riêng.
 - Dubstep: 16 performance pad và step-grid bật/tắt được từng ô.
 - Không dùng lại một generic grid cho cả ba nhạc cụ. Toàn bộ workstation khóa
